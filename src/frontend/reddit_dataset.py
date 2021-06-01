@@ -168,10 +168,18 @@ def app():
     hist_col1, hist_col2 = st.beta_columns([1, 2])
 
     hist_col1.write(data['count'].describe())
-    layout = go.Layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                       height=250, width=400, margin=dict(l=10, r=10, t=10, b=10))
-    fig = go.Figure(data=go.Histogram(x=data['count'], nbinsx=50), layout=layout)
-    hist_col2.plotly_chart(fig, use_container_width=True)
+
+    @st.cache
+    def histogram():
+        print("HISTOGRAM")
+        layout = go.Layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                           height=250, width=400, margin=dict(l=10, r=10, t=10, b=10))
+        return go.Figure(data=go.Histogram(x=data['count'], nbinsx=50), layout=layout)
+
+    t5 = time.time()
+    hist_col2.plotly_chart(histogram(), use_container_width=True)
+    t6 = time.time()
+    print("{0:<20}{1:.3f}s".format("HISTOGRAM:", t6 - t5))
 
     st.write('<style>.st-db{flex-direction:row;}</style>', unsafe_allow_html=True)
 
@@ -190,8 +198,8 @@ def app():
                                 help="Should the top users be displayed sorted by the number of comments or the number "
                                      "of unique subreddits they commented on.")
     st.plotly_chart(group_user(data, limit=n_top_users, sort=sort_column_user), use_container_width=True)
-    t6 = time.time()
-    print("{0:<20}{1:.3f}s".format("CHARTS:", t6 - t5))
+    t7 = time.time()
+    print("{0:<20}{1:.3f}s".format("CHARTS:", t7 - t6))
 
     # st.subheader("Subreddit and User details")
     # with st.beta_expander("Subreddit details"):
