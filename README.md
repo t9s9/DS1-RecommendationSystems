@@ -3,4 +3,5 @@ Private project of the lecture Data Science 1 with the topic Recommendation Syst
 
 
 
-create environment with: conda env create --file env_config.yml
+create environment: conda env create --file env_conf.yml python=3.9
+
