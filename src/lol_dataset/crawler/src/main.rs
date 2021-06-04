@@ -14,6 +14,7 @@ struct Summoner {
 struct Matches {
     #[serde(rename="gameId")]
     game_id: usize,
+    timestamp: u128,
 }
 
 #[derive(Serialize,Deserialize)]
@@ -27,6 +28,8 @@ struct Match {
     participant_ids: Vec<ParticipantIdentities>,
     #[serde(rename="gameType")]
     game_type: String,
+    #[serde(rename="gameCreation")]
+    game_creation: u64,
     participants: Vec<Participant>,
 }
 
@@ -40,6 +43,13 @@ struct Participant {
 #[derive(Serialize,Deserialize)]
 struct Stats {
     win: bool,
+    item0: u64,
+    item1: u64,
+    item2: u64,
+    item3: u64,
+    item4: u64,
+    item5: u64,
+    item6: u64,
 }
 
 #[derive(Serialize,Deserialize)]
@@ -95,7 +105,7 @@ impl ApiCrawler {
 
     pub fn new(conn: Connection, server: Vec<&'static str>,keys: Vec<&str>) -> ApiCrawler {
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS matches (id INTEGER,desc TEXT,idx TEXT);",
+            "CREATE TABLE IF NOT EXISTS matches (champion_id INTEGER, win INTEGER,items TEXT, game_id INTEGER, idx TEXT);",
             [],
         ).unwrap();
         conn.execute(
@@ -110,7 +120,7 @@ impl ApiCrawler {
         let mut vec = Vec::new();
         let mut length = 0;
         for x in server.iter() {
-            let mut stmt = conn.prepare("SELECT id from matches where idx=?").unwrap();
+            let mut stmt = conn.prepare("SELECT game_id from matches where idx=?").unwrap();
             let crawled_games = stmt.query_map([x], |row| {
                 Ok(row.get(0).unwrap())
             }).unwrap().collect::<Result<std::collections::HashSet<usize>,_>>().unwrap();
@@ -250,12 +260,16 @@ fn start_crawling(base_path: usize, api_key: String, stop_cond: std::sync::Arc<s
                             params![x.player.summoner_name,api_base],
                         ).unwrap();
                     }
-                    access.crawled_games.insert(x.game_id);
-                    sql.execute(
-                         "INSERT INTO matches (id,desc,idx) VALUES (?1,?2,?3)",
-                            params![x.game_id,serde_json::to_string(&single_match.participants).unwrap(),api_base],
+                    if std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_millis() < (x.timestamp+1000*60*60*24*100) {
+                        access.crawled_games.insert(x.game_id);
+                        for participant in single_match.participants.iter() {
+                            sql.execute(
+                            "INSERT INTO matches (champion_id, win,items, game_id, idx) VALUES (?1,?2,?3,?4,?5)",
+                            params![participant.champion_id,participant.stats.win,serde_json::to_string(&participant.stats).unwrap(),x.game_id,api_base],
                         ).unwrap();
-                    counter.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+                        }
+                        counter.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+                    }
                 }
                 println!("Crawled a total of {} games",counter.load(std::sync::atomic::Ordering::Relaxed));
             }
@@ -266,7 +280,7 @@ fn start_crawling(base_path: usize, api_key: String, stop_cond: std::sync::Arc<s
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open("league_of_legends.db").unwrap();
     let api_crawler = ApiCrawler::new(conn,vec!["https://euw1.api.riotgames.com","https://eun1.api.riotgames.com","https://na1.api.riotgames.com","https://ru.api.riotgames.com","https://la1.api.riotgames.com","https://la2.api.riotgames.com"],
-vec!["RGAPI-3b27b3fa-05aa-455a-a6cb-b90bce70afc7", "RGAPI-7c7f6b92-23d4-4759-937f-2dd521a4a299"]);
+vec!["RGAPI-948af2fa-07e1-497c-8cde-6e46ba34d7e8"]);
     api_crawler.run();
     Ok(())
 }
