@@ -1,0 +1,49 @@
+@media (prefers-color-scheme: dark) {
+    .content-container {
+        background-color: #31333F;
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    .content-container {
+        background-color: #F0F2F6;
+    }
+}
+
+
+.content-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 12px 0;
+    border-radius: 8px;
+}
+
+.content-container > div:not(:last-child) {
+    border-right: 1px solid #414165;
+}
+
+.content-container > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2px 0;
+    flex: 1 1;
+    height: 100%;
+    white-space: nowrap;
+}
+
+.label {
+    display: flex;
+    align-items: center;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: #bbbedb;
+}
+
+.value {
+    font-size: 1rem;
+    font-weight: 800;
+}
