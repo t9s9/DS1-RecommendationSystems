@@ -8,4 +8,5 @@ def timer(func):
         t2 = time()
         print("{0:<20}{1:.3f}s".format("EXECUTION TIME:", t2 - t1))
         return res
+
     return wrapper

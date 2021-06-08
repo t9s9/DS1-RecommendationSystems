@@ -8,6 +8,7 @@ from .SessionState import session_get
 from ..data import REDDIT_DATASET, REDDIT_META
 from .util import timer
 
+
 @st.cache
 def read_csv_cached(path):
     return pd.read_csv(path)
@@ -24,7 +25,7 @@ def app():
 
     t1 = time.time()
 
-    subreddit_info = read_csv_cached(REDDIT_META)[['subreddit', 'num_subscribers', 'over18', 'public_description']]
+    subreddit_info = read_csv_cached(REDDIT_META)
 
     t2 = time.time()
     print("{0:<20}{1:.3f}s".format("DATASET:", t2 - t1))
@@ -140,15 +141,22 @@ def app():
                                     help="The number of different subreddits that a user must have commented on to be "
                                          "included in the dataset.")
 
-    s_include_over18 = filter_conf.checkbox("Include subreddits over 18?", value=state.include_over18,
+    s_include_over18 = filter_conf.checkbox("Subreddits over 18?", value=state.include_over18,
                                             help="Should subreddits be included that are not approved for minors?")
 
-    if filter_conf.form_submit_button("Apply"):
+    preprocess_ratings = filter_conf.selectbox("Save", options=['a', 'b'],
+                                               help="a")
+
+    submit1, submit2 = filter_conf.beta_columns([1,1])
+
+    if submit1.form_submit_button("Apply"):
         state.r_users = s_r_users
         state.r_comments = s_r_comments
         state.u_comments = s_u_comments
         state.u_reddit = s_u_reddit
         state.include_over18 = s_include_over18
+
+    submit2.markdown("<div class='status'></div>", unsafe_allow_html=True)
 
     same = (state.r_users == s_r_users) & (state.r_comments == s_r_comments) & (
             state.u_comments == s_u_comments) & (state.u_reddit == s_u_reddit) & (
@@ -196,7 +204,7 @@ def app():
     def histogram():
         layout = go.Layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                            height=250, width=400, margin=dict(l=10, r=10, t=10, b=10))
-        return go.Figure(data=go.Histogram(x=data['count'], nbinsx=50), layout=layout)
+        return go.Figure(data=go.Histogram(x=data['count'].iloc[:10000], nbinsx=50), layout=layout)
 
     t5 = time.time()
     hist_col2.plotly_chart(histogram(), use_container_width=True)

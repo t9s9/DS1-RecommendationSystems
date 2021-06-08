@@ -47,3 +47,13 @@
     font-size: 1rem;
     font-weight: 800;
 }
+
+
+.status {
+    height: 25px;
+    width: 25px;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    align-content: center;
+}
