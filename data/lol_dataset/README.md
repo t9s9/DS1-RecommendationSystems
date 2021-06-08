@@ -1,2 +1,2 @@
 # LOL Dataset
-Dieses dataset ist von kaggle unter der Addresse ![Dataset](https://www.kaggle.com/gyejr95/league-of-legendslol-ranked-games-2020-ver1/download). Bitte downloaden Sie dieses in diesen Ordner und entpacken es hier.
+Dieses dataset ist von kaggle unter der Addresse ![Dataset](https://www.kaggle.com/gyejr95/league-of-legendslol-ranked-games-2020-ver1/download). Bitte downloaden Sie dieses in diesen Ordner und entpacken es hier. To download the lol json champion data pleas download the json from ![json](http://ddragon.leagueoflegends.com/cdn/6.24.1/data/en_US/champion.json) and put it in this folder.
