@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pprint import pprint
 
 import numpy as np
@@ -76,8 +77,7 @@ class GridSearchCV:
     def fit(self, data):
         self.best = {metric: [0, "", ""] for metric in self.metrics}
         for param_set, params in enumerate(self.param_grid):
-            self.result[f'param_set_{param_set}'] = dict(params=params)
-
+            self.result[f'param_set_{param_set}'] = dict(params=deepcopy(params))
             for fold, (train_data, test_data) in enumerate(self.cv.split(data)):
                 if 'alpha' in params:
                     alpha = params['alpha']
@@ -85,7 +85,6 @@ class GridSearchCV:
                 else:
                     alpha = 1
                 algo = self.algo(**params)
-
                 result = self._fit_and_eval(train_data=(train_data * alpha), test_data=(test_data * alpha), algo=algo)
                 self.result[f'param_set_{param_set}'][f'Fold {fold}'] = result
             self.result[f'param_set_{param_set}']['mean'] = {key: np.mean(np.array(
@@ -110,10 +109,23 @@ class GridSearchCV:
                                     show_progress=False)
         return {key: eval[key] for key in self.metrics}
 
-    def get_result(self, show=True):
+    def get_result(self, show=True, filter_metric=None):
+        if filter_metric is not None:
+            result = []
+            for _, k in self.result.items():
+                r = dict()
+                for i, j in k.items():
+                    for a, b in j.items():
+                        if a == filter_metric:
+                            r[i] = b
+                        if i == "params":
+                            r[a] = b
+                result.append(r)
+        else:
+            result = self.result
         if show:
-            pprint(self.result)
-        return self.result
+            pprint(result)
+        return result
 
     def get_best(self):
         return self.best
