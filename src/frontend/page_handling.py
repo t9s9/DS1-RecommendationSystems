@@ -1,5 +1,6 @@
 import src.frontend.menu
 import src.frontend.reddit_dataset
+import src.frontend.knn
 
 
 class PageHandler:
@@ -20,7 +21,7 @@ class PageHandler:
         return self.pages[self.current_page]()
 
 
-handler = PageHandler(start="menu")
+handler = PageHandler(start="reddit_dataset")
 handler.add_page(src.frontend.menu, "menu")
 handler.add_page(src.frontend.reddit_dataset, "reddit_dataset")
-print(handler.pages)
+handler.add_page(src.frontend.knn, "knn")

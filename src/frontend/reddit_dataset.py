@@ -1,8 +1,11 @@
+import base64
 import time
 
 import pandas as pd
 import plotly.graph_objs as go
 import streamlit as st
+import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer
 
 from .SessionState import session_get
 from ..data import REDDIT_DATASET, REDDIT_META
@@ -62,6 +65,8 @@ def app():
         # filter user
         print("Filter")
         raw_dataset = read_csv_cached(REDDIT_DATASET)
+        raw_dataset['count'] = raw_dataset['count'].astype(np.int16)
+
         user_grouped = group_user(raw_dataset)
         subreddit_grouped = group_subreddit(raw_dataset)
 
@@ -144,10 +149,7 @@ def app():
     s_include_over18 = filter_conf.checkbox("Subreddits over 18?", value=state.include_over18,
                                             help="Should subreddits be included that are not approved for minors?")
 
-    preprocess_ratings = filter_conf.selectbox("Save", options=['a', 'b'],
-                                               help="a")
-
-    submit1, submit2 = filter_conf.beta_columns([1,1])
+    submit1, submit2 = filter_conf.beta_columns([1, 1])
 
     if submit1.form_submit_button("Apply"):
         state.r_users = s_r_users
@@ -155,8 +157,6 @@ def app():
         state.u_comments = s_u_comments
         state.u_reddit = s_u_reddit
         state.include_over18 = s_include_over18
-
-    submit2.markdown("<div class='status'></div>", unsafe_allow_html=True)
 
     same = (state.r_users == s_r_users) & (state.r_comments == s_r_comments) & (
             state.u_comments == s_u_comments) & (state.u_reddit == s_u_reddit) & (
@@ -173,12 +173,22 @@ def app():
     if st.sidebar.button("Save"):
         data.to_csv("data.csv", index=False)
 
+    c1, c2 = st.sidebar.beta_columns([3, 1])
+    c1.selectbox("To algo", options=['KNN', 'SVP'])
+    if c2.button("Go"):
+        data.to_csv("data.csv", index=False)
+
     t5 = time.time()
     print("{0:<20}{1:.3f}s".format("FILTER:", t5 - t4))
     data_size, num_users, num_reddits = stats(data)
     st.title("Subreddit Dataset")
 
-    st.markdown("Information about Reddit ...")
+    st.markdown("""Reddit is a social news platform, i.e. a huge collection of news and content created by users. Any 
+    user can create a post consisting of simple text, links, images, or videos. Other users can interact with these 
+    posts in the form of a comment or positive or negative feedback.  Reddit is divided into user-created sub-forums 
+    called subreddits, which categorize posts by topic. For example, the subreddit "Python" contains all kinds of 
+    information about Python. But this is not always so clear, as for example the subreddit "SubredditSimulator", 
+    where bots automatically generate content and users can react to it.""")
 
     st.markdown("""<div class="content-container">
     <div class="content-wrapper">
@@ -196,15 +206,45 @@ def app():
     </div>""".format(data_size, num_users, num_reddits), unsafe_allow_html=True)
 
     st.subheader("Histogram of Ratings")
-    hist_col1, hist_col2 = st.beta_columns([1, 2])
+    hist_col1, hist_col2 = st.beta_columns([1, 1])
 
-    hist_col1.write(data['count'].describe())
+    # describe = data['count'].describe().to_dict()
+    # print(describe)
+
+    preprocess_desc = {"Identity": "Keep the number of comments as they are in the dataset.",
+                       "Binary": "The number of comments no longer matters, only the fact that a user has interacted with a subreddit.",
+                       "KBinsDiscretizer": "Bin continuous data into intervals."}
+
+    @st.cache
+    def preprocess_func(df, methode, args):
+        df = df.copy(deep=True)
+        if methode == "Identity":
+            methode = df['count']
+        elif methode == "Binary":
+            methode = 1
+        elif methode == "KBinsDiscretizer":
+            est = KBinsDiscretizer(encode='ordinal', **args)
+            methode = est.fit_transform(df[['count']]) + 1
+        df['count'] = methode
+        return df
+
+    args = dict()
+    preprocess_methode = hist_col1.selectbox("Ratings preprocessing",
+                                             options=['Identity', 'Binary', 'KBinsDiscretizer'],
+                                             help="Select a preprocessing method")
+    hist_col1.markdown(f"Details: {preprocess_desc[preprocess_methode]}")
+    if preprocess_methode == "KBinsDiscretizer":
+        args = dict(strategy=hist_col1.selectbox("Strategy used to define the widths of the bins",
+                                                 options=['quantile', 'uniform', 'kmeans']),
+                    n_bins=hist_col1.number_input("The number of bins to produce", value=5, min_value=2, max_value=100,
+                                                  step=1))
+    data = preprocess_func(data, preprocess_methode, args)
 
     @st.cache
     def histogram():
         layout = go.Layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                            height=250, width=400, margin=dict(l=10, r=10, t=10, b=10))
-        return go.Figure(data=go.Histogram(x=data['count'].iloc[:10000], nbinsx=50), layout=layout)
+        return go.Figure(data=go.Histogram(x=data['count'].iloc[:], nbinsx=50), layout=layout)
 
     t5 = time.time()
     hist_col2.plotly_chart(histogram(), use_container_width=True)
