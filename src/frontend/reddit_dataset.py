@@ -1,25 +1,26 @@
-import base64
 import time
+from copy import deepcopy
 
-import pandas as pd
+import numpy as np
 import plotly.graph_objs as go
 import streamlit as st
-import numpy as np
 from sklearn.preprocessing import KBinsDiscretizer
 
+import src.frontend.page_handling as page_handling
+from src.frontend.util import read_csv_cached
 from .SessionState import session_get
-from ..data import REDDIT_DATASET, REDDIT_META
 from .util import timer
-
-
-@st.cache
-def read_csv_cached(path):
-    return pd.read_csv(path)
+from ..data import REDDIT_DATASET, REDDIT_META
+from src.frontend.dataset import DatasetWrapper
 
 
 @timer
 def app():
-    print()
+    state = session_get()
+
+    if st.button("Back"):
+        page_handling.handler.set_page("menu")
+
     st.write(f"<style>{open('src/frontend/css/reddit_dataset.css').read()}</style>", unsafe_allow_html=True)
 
     @st.cache(show_spinner=False)
@@ -27,13 +28,10 @@ def app():
         return df.shape[0], df['user'].nunique(), df['subreddit'].nunique()
 
     t1 = time.time()
-
     subreddit_info = read_csv_cached(REDDIT_META)
 
     t2 = time.time()
     print("{0:<20}{1:.3f}s".format("DATASET:", t2 - t1))
-
-    state = session_get(u_comments=20, u_reddit=20, r_comments=100, r_users=100, include_over18=False)
 
     @st.cache
     def group_subreddit(raw_dataset):
@@ -131,52 +129,69 @@ def app():
     st.sidebar.title("Configuration")
     filter_conf = st.sidebar.form(key="filter_conf")
     s_r_users = filter_conf.slider("Min. User per Subreddit",
-                                   value=state.r_users, min_value=0, max_value=200, step=10,
+                                   value=state.reddit_config['r_users'], min_value=0, max_value=200, step=10,
                                    help="The minimum number of unique users a subreddit must have to be included in the "
                                         "dataset.")
     s_r_comments = filter_conf.slider("Min. Comment per Subreddit",
-                                      value=state.r_comments, min_value=0, max_value=200, step=10,
+                                      value=state.reddit_config['r_comments'], min_value=0, max_value=200, step=10,
                                       help="The minimum number of comments a subreddit must have to be included in the "
                                            "dataset.")
     s_u_comments = filter_conf.slider("Min. Comment per User",
-                                      value=state.u_comments, min_value=0, max_value=200, step=10,
+                                      value=state.reddit_config['u_comments'], min_value=0, max_value=200, step=10,
                                       help="The minimum number total number of comments a user must have written,")
     s_u_reddit = filter_conf.slider("Min. Subreddit per User",
-                                    value=state.u_reddit, min_value=0, max_value=200, step=10,
+                                    value=state.reddit_config['u_reddit'], min_value=0, max_value=200, step=10,
                                     help="The number of different subreddits that a user must have commented on to be "
                                          "included in the dataset.")
 
-    s_include_over18 = filter_conf.checkbox("Subreddits over 18?", value=state.include_over18,
+    s_include_over18 = filter_conf.checkbox("Subreddits over 18?", value=state.reddit_config['include_over18'],
                                             help="Should subreddits be included that are not approved for minors?")
+    s_config_name = filter_conf.text_input("Name",
+                                           value=f"Subreddit_dataset_{len([d for d in state.datasets if d.id == 0]) + 1}",
+                                           help="Give this configuration a name to find him later.")
 
-    submit1, submit2 = filter_conf.beta_columns([1, 1])
+    def refresh_stats():
+        # Check for duplicate name
+        if s_config_name in [s.name for s in state.datasets]:
+            st.sidebar.warning("The name already exists. Please choose another one. The configuration was not applied.")
+            return False
+        else:
+            state.reddit_config['r_users'] = s_r_users
+            state.reddit_config['r_comments'] = s_r_comments
+            state.reddit_config['u_comments'] = s_u_comments
+            state.reddit_config['u_reddit'] = s_u_reddit
+            state.reddit_config['include_over18'] = s_include_over18
+            state.reddit_config['name'] = s_config_name
+            return True
 
-    if submit1.form_submit_button("Apply"):
-        state.r_users = s_r_users
-        state.r_comments = s_r_comments
-        state.u_comments = s_u_comments
-        state.u_reddit = s_u_reddit
-        state.include_over18 = s_include_over18
-
-    same = (state.r_users == s_r_users) & (state.r_comments == s_r_comments) & (
-            state.u_comments == s_u_comments) & (state.u_reddit == s_u_reddit) & (
-                   state.include_over18 == s_include_over18)
+    if filter_conf.form_submit_button("Apply"):
+        refresh_stats()
+        st.sidebar.success("Successfully applied configuration to dataset.")
 
     t4 = time.time()
     print("{0:<20}{1:.3f}s".format("SIDEBAR:", t4 - t3))
 
-    data, g_user, g_subreddit = filter_dataset(r_users=state.r_users, r_comments=state.r_comments,
-                                               u_comments=state.u_comments, u_reddit=state.u_reddit,
-                                               include_over18=state.include_over18)
+    data, g_user, g_subreddit = filter_dataset(r_users=state.reddit_config['r_users'],
+                                               r_comments=state.reddit_config['r_comments'],
+                                               u_comments=state.reddit_config['u_comments'],
+                                               u_reddit=state.reddit_config['u_reddit'],
+                                               include_over18=state.reddit_config['include_over18'])
 
-    st.sidebar.text_input("Path", value="data.csv")
-    if st.sidebar.button("Save"):
-        data.to_csv("data.csv", index=False)
+    sd_c1, _, sd_c2 = st.sidebar.beta_columns([1, 2, 1])
+    if sd_c1.button("Export", help="Exports the current dataset as csv file to the server folder."):
+        data.to_csv(f"{state.reddit_config['name']}.csv", index=False)
+        st.sidebar.success(f"Dataset '{state.reddit_config['name']}' exported.")
 
-    c1, c2 = st.sidebar.beta_columns([3, 1])
-    c1.selectbox("To algo", options=['KNN', 'SVP'])
-    if c2.button("Go"):
-        data.to_csv("data.csv", index=False)
+    if sd_c2.button("Save", help="Saves the current configuration."):
+        param = deepcopy(state.reddit_config)
+        param.pop("name")
+        dataset = DatasetWrapper(name=state.reddit_config['name'],
+                                 id=0,
+                                 data=data,
+                                 param=param)
+
+        state.datasets.append(dataset)
+        st.sidebar.success(f"Dataset '{state.reddit_config['name']}' saved.")
 
     t5 = time.time()
     print("{0:<20}{1:.3f}s".format("FILTER:", t5 - t4))
@@ -286,3 +301,5 @@ def app():
     t8 = time.time()
     print("{0:<20}{1:.3f}s".format("DETAILS:", t8 - t7))
     print("-" * 26)
+
+    print(state.reddit_config)

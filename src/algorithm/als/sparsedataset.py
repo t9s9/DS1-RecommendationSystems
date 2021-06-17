@@ -2,14 +2,17 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 
 
-class Dataset:
+class SparseDataset:
     @classmethod
-    def from_csv(cls, csv, user="user", item="item", rating="rating"):
+    def from_csv(cls, csv, user=None, item=None, rating=None):
         print("Loading csv.")
         return cls.from_dataframe(pd.read_csv(csv), user=user, item=item, rating=rating)
 
     @classmethod
-    def from_dataframe(cls, df, user="user", item="item", rating="rating"):
+    def from_dataframe(cls, df, user=None, item=None, rating=None):
+        user = df.columns[0] if user is None else user
+        item = df.columns[0] if user is None else item
+        rating = df.columns[0] if user is None else rating
         print("Creating pivot.")
         pivot = pd.pivot_table(df, index=item, columns=user, values=rating, fill_value=0)
         return cls.from_pivot(pivot)

@@ -1,0 +1,35 @@
+/* not beautiful but functional solution */
+div[data-testid="stBlock"]:nth-child(3) > div > div > div {
+    display: flex;
+}
+
+div[data-testid="stBlock"]:nth-child(3) > div > div > div > button {
+    line-height: inherit;
+}
+
+.row-widget.stButton {
+    display: grid;
+}
+
+.row-widget.stButton > button {
+    line-height: 8;
+}
+
+.dataset {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 10px;
+    border-bottom: 1px solid #414165;
+}
+
+.name {
+    font-weight: 500;
+}
+
+.parameter {
+
+}
+
+
+

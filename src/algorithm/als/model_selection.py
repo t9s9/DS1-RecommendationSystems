@@ -60,7 +60,7 @@ class GridSearchCV:
 
     """
 
-    def __init__(self, algo, param_grid, cv=5, eval_k=10, metrics=['map', 'precision']):
+    def __init__(self, algo, param_grid, cv=5, eval_k=10, metrics=['map', 'precision'], random_state=0):
         self.algo = algo
         self.cv = cv
         self.param_grid = ParameterGrid(param_grid)
@@ -69,7 +69,7 @@ class GridSearchCV:
         self.result = dict()
         self.best = None
 
-        self.cv = KFold(n_splits=cv, shuffle=True, random_state=0)
+        self.cv = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
     def __len__(self):
         return len(self.param_grid)
