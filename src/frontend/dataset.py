@@ -12,7 +12,7 @@ class DatasetWrapper:
         self.sparse_data_train, self.sparse_data_test = None, None
         self.surprise_data = None
 
-        self.trainings = []
+        self.trainings_als = []
 
     def create_sparse_dataset(self, test_size=0.0):
         self.sparse_data_train, self.sparse_data_test = SparseDataset.from_dataframe(self.data, test_size=test_size)

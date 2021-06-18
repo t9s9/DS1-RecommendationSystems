@@ -1,3 +1,4 @@
+import pandas as pd
 from implicit.als import AlternatingLeastSquares
 from implicit.evaluation import ranking_metrics_at_k
 
@@ -22,9 +23,11 @@ class ImplicitModelWrapper:
         self.model.fit_callback = self.fit_callback
 
         self.current_iteration = 0
+        self.current_iteration_time = 0
 
     def fit_callback(self, iteration, time):
         self.current_iteration = iteration
+        self.current_iteration_time = time
 
     def resolve_dataset(self, dataset: DatasetWrapper):
         """
@@ -40,14 +43,18 @@ class ImplicitModelWrapper:
         self.is_fitted = True
         return self
 
-    def similar_items(self, item: str, N=10, show=False):
-        sitems = self.model.similar_items(self.dataset_train.get_item_id(item), N=N)
+    def similar_items(self, item: str, N=10, show=False, use_df=False):
+        sitems = self.model.similar_items(self.dataset_train.get_item_id(item), N=N+1)
         if show:
             for i, (idx, dist) in enumerate(sitems):
                 print("{0:<3}{1:<20}{2:.3f}".format(i + 1, self.dataset_train.get_item(idx), dist))
+        if use_df:
+            sitems = pd.DataFrame(sitems, columns=['item', 'score'])
+            sitems['item'] = sitems['item'].apply(lambda x: self.dataset_train.get_item(x))
+            sitems = sitems.tail(-1)  # skip the first item because its itself
         return sitems
 
-    def recommend(self, user: str, N=10, show=False):
+    def recommend(self, user: str, N=10, show=False, as_df=False):
         userid = self.dataset_train.get_user_id(user)
 
         rec = self.model.recommend(userid, self.dataset_train.user_item, N=N, filter_already_liked_items=True)
@@ -60,8 +67,20 @@ class ImplicitModelWrapper:
                                                 self.dataset_train.user_item.getrow(userid).data), key=lambda x: x[1],
                                             reverse=True):
                 print("{0:<23}{1:<3}".format(self.dataset_train.get_item(subreddit), rating))
+        if as_df:
+            rec = pd.DataFrame(rec, columns=['item', 'score'])
+            rec['item'] = rec['item'].apply(lambda x: self.dataset_train.get_item(x))
 
         return rec
+
+    def get_user_ratings(self, user, as_df=False):
+        userid = self.dataset_train.get_user_id(user)
+        rating = sorted(zip(self.dataset_train.user_item.getrow(userid).indices,
+                            self.dataset_train.user_item.getrow(userid).data), key=lambda x: x[1], reverse=True)
+        if as_df:
+            rating = pd.DataFrame(rating, columns=['item', 'rating'])
+            rating['item'] = rating['item'].apply(lambda x: self.dataset_train.get_item(x))
+        return rating
 
     def evaluate(self, metric="map", k=10):
         if self.dataset_test is None:
@@ -81,3 +100,8 @@ class ImplicitModelWrapper:
             data['user_factors'] = self.model.user_factors
             data['item_factors'] = self.model.item_factors
         return data
+
+    def as_inference(self, user_factors, item_factors):
+        self.model.user_factors = user_factors
+        self.model.item_factors = item_factors
+        return self

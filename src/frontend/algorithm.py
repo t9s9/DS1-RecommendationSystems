@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 import src.frontend.page_handling as page_handling
 
@@ -36,10 +37,11 @@ def als_configuration(datasets):
 @timer
 def app():
     state = session_get()
-    print("Datasets", [str(x) for x in state.datasets])
 
     if st.button("Back"):
         page_handling.handler.set_page("menu")
+
+    st.title("Algorithm")
 
     progress_bar = st.progress(0)
     progress_text = st.empty()
@@ -67,8 +69,10 @@ def app():
                         val = int((model.current_iteration + 1) / model.iterations * 100)
                         progress_bar.progress(val)
                         progress_text.write(
-                            "Fitting dataset {2}:      {0:04d} / {1:04d}".format(model.current_iteration + 1,
-                                                                                 model.iterations, this_dataset.name))
+                            "Fitting dataset {2}:      {0:04d} / {1:04d}  ({3:.3f}s)".format(
+                                model.current_iteration + 1,
+                                model.iterations, this_dataset.name,
+                                model.current_iteration_time))
 
                 progress_updater = threading.Thread(target=update_progressbar)
                 st.report_thread.add_report_ctx(progress_updater)
@@ -79,23 +83,60 @@ def app():
                 progress_updater.join()
 
                 model_data = model.export()
-                progress_text.write("Evaluate")
+                progress_text.write("Evaluating...")
                 model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
-                this_dataset.trainings.append(model_data)
+                this_dataset.trainings_als.append(model_data)
                 progress_text.write("")
                 progress_bar.progress(0)
 
+    als_result_df = []
     for dataset in state.datasets:
-        if dataset.trainings:
-            for training in dataset.trainings:
-                st.write(f"{dataset.name}: {training['config']} {training['evaluation']}")
+        for i, training in enumerate(dataset.trainings_als):
+            d = dict(tid=i + 1, name=dataset.name)
+            d.update(training['config'])
+            d.update(training['evaluation'])
+            als_result_df.append(d)
+    if als_result_df:
+        st.header("Training results")
+        st.subheader("ALS")
+        als_result_df = pd.DataFrame(als_result_df).set_index(['tid', 'name'])
+        st.write(als_result_df)
 
-    st.subheader("Recommend the top N items to an user")
-    col1, col2 = st.beta_columns([2, 1])
-    col1.text_input("User", help="Select a user for which item recommendations are to be made.")
-    col2.number_input("N", help="The number of top recommendations", min_value=1, step=1, value=10, key="N_users")
+        with st.beta_expander("Choose a trained model for inference:"):
+            active_training = st.selectbox("Current training", options=als_result_df.index.values,
+                                           format_func=lambda x: f"Training: {x[0]} - Dataset: {x[1]}")
 
-    st.subheader("Find the top N similar item to an item")
-    col1, col2 = st.beta_columns([2, 1])
-    col1.text_input("Item", help="Select an item to find the most similar other items.")
-    col2.number_input("N", help="The number of top similar items", min_value=1, step=1, value=10, key="N_items")
+            if active_training:
+                # find dataset
+                dataset_id = [d.name for d in state.datasets].index(active_training[1])
+                this_dataset = state.datasets[dataset_id]
+                this_training = this_dataset.trainings_als[active_training[0] - 1]
+
+                inference_model = ImplicitModelWrapper(this_dataset,
+                                                       factors=this_training['config']['factors']).as_inference(
+                    user_factors=this_training['user_factors'],
+                    item_factors=this_training['item_factors'])
+
+                st.subheader("Recommend the top N items to an user")
+                col1, col2 = st.beta_columns([2, 1])
+                recommend_user = col1.selectbox("User", options=inference_model.dataset_train.users,
+                                                help="Select a user for which item recommendations are to be made.", )
+                recommend_n = col2.number_input("N", help="The number of top recommendations", min_value=1, step=1,
+                                                value=10,
+                                                key="N_users")
+                if recommend_user:
+                    col1, col2 = st.beta_columns([1, 1])
+                    col1.markdown("Recommendations")
+                    col1.write(inference_model.recommend(user=recommend_user, N=recommend_n, as_df=True))
+                    col2.markdown("True ratings")
+                    col2.write(inference_model.get_user_ratings(user=recommend_user, as_df=True))
+
+                st.subheader("Find the top N similar item to an item")
+                col1, col2 = st.beta_columns([2, 1])
+                similar_item = col1.selectbox("Item", options=inference_model.dataset_train.items,
+                                              help="Select an item to find the most similar other items.")
+                similar_n = col2.number_input("N", min_value=1, step=1, value=10, key="N_items",
+                                              help="The number of top similar items")
+
+                if similar_item:
+                    st.write(inference_model.similar_items(similar_item, similar_n, use_df=True))
