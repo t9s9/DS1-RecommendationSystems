@@ -15,5 +15,5 @@ check_all_datasets()
 state = session_get(datasets=[],
                     reddit_config=dict(u_comments=20, u_reddit=20, r_comments=100, r_users=100, include_over18=False,
                                        name="Subreddit_dataset_1"))
-print(state.__dict__)
+print("Current session_state:", state.__dict__)
 handler.run()

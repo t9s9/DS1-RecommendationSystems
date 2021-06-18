@@ -28,7 +28,7 @@ def app():
     if state.datasets:
         st.subheader("Configured dataset:")
         for i, dataset in enumerate(state.datasets):
-            print(dataset.name, dataset.parameter)
+            print("Stored dataset:", dataset)
             # three cols for 'css hack'
             c1, _, c2 = st.beta_columns([9, 1, 1])
             # TODO: more beauty
