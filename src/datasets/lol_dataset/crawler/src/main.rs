@@ -30,6 +30,8 @@ struct Match {
     game_type: String,
     #[serde(rename="gameCreation")]
     game_creation: u64,
+    #[serde(rename="gameDuration")]
+    game_duration: u64,
     participants: Vec<Participant>,
 }
 
@@ -105,7 +107,7 @@ impl ApiCrawler {
 
     pub fn new(conn: Connection, server: Vec<&'static str>,keys: Vec<&str>) -> ApiCrawler {
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS matches (champion_id INTEGER, win INTEGER,items TEXT, game_id INTEGER, idx TEXT);",
+            "CREATE TABLE IF NOT EXISTS matches (champion_id INTEGER, win INTEGER,items TEXT, game_id INTEGER,game_duration INTEGER, idx TEXT);",
             [],
         ).unwrap();
         conn.execute(
@@ -264,11 +266,14 @@ fn start_crawling(base_path: usize, api_key: String, stop_cond: std::sync::Arc<s
                         access.crawled_games.insert(x.game_id);
                         for participant in single_match.participants.iter() {
                             sql.execute(
-                            "INSERT INTO matches (champion_id, win,items, game_id, idx) VALUES (?1,?2,?3,?4,?5)",
-                            params![participant.champion_id,participant.stats.win,serde_json::to_string(&participant.stats).unwrap(),x.game_id,api_base],
+                            "INSERT INTO matches (champion_id, win,items, game_id, game_duration, idx) VALUES (?1,?2,?3,?4,?5,?6)",
+                            params![participant.champion_id,participant.stats.win,serde_json::to_string(&participant.stats).unwrap(),x.game_id,single_match.game_duration, api_base],
                         ).unwrap();
                         }
                         counter.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+                    }
+                    else {
+                        break;
                     }
                 }
                 println!("Crawled a total of {} games",counter.load(std::sync::atomic::Ordering::Relaxed));
@@ -280,7 +285,7 @@ fn start_crawling(base_path: usize, api_key: String, stop_cond: std::sync::Arc<s
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open("league_of_legends.db").unwrap();
     let api_crawler = ApiCrawler::new(conn,vec!["https://euw1.api.riotgames.com","https://eun1.api.riotgames.com","https://na1.api.riotgames.com","https://ru.api.riotgames.com","https://la1.api.riotgames.com","https://la2.api.riotgames.com"],
-vec!["RGAPI-948af2fa-07e1-497c-8cde-6e46ba34d7e8"]);
+vec!["RGAPI-5908ce12-8f25-4e54-89d1-075dc45a9992","RGAPI-6d8a26ee-7493-4561-a2ca-38826c5f33d3"]);
     api_crawler.run();
     Ok(())
 }
