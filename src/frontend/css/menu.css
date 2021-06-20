@@ -20,15 +20,53 @@ div[data-testid="stBlock"]:nth-child(3) > div > div > div > button {
     flex-direction: row;
     justify-content: space-between;
     padding: 10px;
-    border-bottom: 1px solid #414165;
+}
+
+.details {
+    position: relative;
+    display: inline-block;
+    border-bottom: 1px dotted black;
+}
+
+.dataset .details {
+    visibility: hidden;
+    width: 400px;
+    background-color: rgb(19, 23, 32);
+    color: #F0F2F6;
+    text-align: center;
+    padding: 10px 0;
+    border-radius: 6px;
+    border: #393a47 solid 1px;
+
+    position: absolute;
+    z-index: 1;
+    bottom: 100%;
+    left: 50%;
+    margin-left: -200px;
+}
+
+.dataset .details::after {
+    content: " ";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: white transparent transparent transparent;
+}
+
+.dataset:hover .details {
+    visibility: visible;
 }
 
 .name {
     font-weight: 500;
 }
 
-.parameter {
 
+.separator {
+    border-bottom: #31333F 1px solid;
 }
 
 

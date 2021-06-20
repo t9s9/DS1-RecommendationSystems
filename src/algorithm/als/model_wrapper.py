@@ -90,7 +90,7 @@ class ImplicitModelWrapper:
 
         score = ranking_metrics_at_k(model=self.model, K=k, train_user_items=self.dataset_train.user_item,
                                      test_user_items=self.dataset_test.user_item)[metric]
-        return dict(metric=metric, k=k, score=score)
+        return dict(score=score, k=k, metric=metric)
 
     def export(self):
         config = dict(iterations=self.iterations, factors=self.factors, regularization=self.regularization)

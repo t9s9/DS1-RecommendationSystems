@@ -83,8 +83,15 @@ def app():
                 progress_updater.join()
 
                 model_data = model.export()
-                progress_text.write("Evaluating...")
-                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                model_data['test_ratio'] = config['test_ratio']
+
+                if this_dataset.sparse_data_test is not None:
+                    progress_text.write("Evaluating...")
+                    model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                else:
+                    model_data['evaluation'] = dict(score="", metric="", k="")
+                    st.info("An evaluation cannot be performed because no test set was specified.")
+
                 this_dataset.trainings_als.append(model_data)
                 progress_text.write("")
                 progress_bar.progress(0)
@@ -93,18 +100,17 @@ def app():
     for dataset in state.datasets:
         for i, training in enumerate(dataset.trainings_als):
             d = dict(tid=i + 1, name=dataset.name)
+            if 'evaluation' in training.keys():
+                d.update(training['evaluation'])
+                d['test_ratio'] = training['test_ratio']
             d.update(training['config'])
-            d.update(training['evaluation'])
             als_result_df.append(d)
+
     if als_result_df:
         st.header("Training results")
         st.subheader("ALS")
         als_result_df = pd.DataFrame(als_result_df).set_index(['tid', 'name'])
-
-        def highlight_max(s):
-            return ["background-color : red"]
-
-        als_result_df.style.apply(highlight_max)
+        als_result_df = als_result_df
         st.write(als_result_df)
 
         with st.beta_expander("Choose a trained model for inference:"):

@@ -28,18 +28,26 @@ def app():
 
     if state.datasets:
         st.subheader("Configured dataset:")
+        st.markdown("<div class='separator'></div>", unsafe_allow_html=True)
         for i, dataset in enumerate(state.datasets):
-            print("Stored dataset:", dataset)
             # three cols for 'css hack'
-            c1, _, c2 = st.beta_columns([9, 1, 1])
-            # TODO: more beauty
+            c1, _, c2 = st.beta_columns([8, 2, 1])
+
+            x = ", ".join(f"{i}={j}" for i, j in dataset.parameter.items())
+
             c1.markdown("""
             <div class='dataset'>
-                <div class='name'>{0}. {1}</div>
-                <div class='parameter'>{2}</div>
-            </div>""".format(i, dataset.name, dataset.parameter), unsafe_allow_html=True)
+                    <div class='id'>{0}.</div>
+                    <div class='name'>{1}</div>
+                    <div class='type'>{2}</div> 
+                    <span class='details'>{3}</span>
+            </div>
+                    """.format(i, dataset.name, 'Subreddit' if dataset.id == 0 else 'League of Legends', x),
+                        unsafe_allow_html=True)
+
             if c2.button("❌", key=f"ds_del_{i}"):
                 del state.datasets[i]
                 force_rerun()
+            st.markdown("<div class='separator'></div>", unsafe_allow_html=True)
 
     st.write("Made by Alexander Leonhardt and Timothy Schaumlöffel.")
