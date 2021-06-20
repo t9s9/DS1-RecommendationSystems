@@ -11,7 +11,7 @@ def timer(func):
         t1 = time()
         res = func(*args, **kwargs)
         t2 = time()
-        print("{0:<20}{1:.3f}s".format("EXECUTION TIME:", t2 - t1))
+        print("{0:<20}{1:.3f}s".format(f"EXECUTION TIME OF {func.__module__}: ", t2 - t1))
         return res
 
     return wrapper

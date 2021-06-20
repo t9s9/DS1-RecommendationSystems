@@ -27,11 +27,8 @@ def app():
     def stats(df):
         return df.shape[0], df['user'].nunique(), df['subreddit'].nunique()
 
-    t1 = time.time()
     subreddit_info = read_csv_cached(REDDIT_META)
 
-    t2 = time.time()
-    print("{0:<20}{1:.3f}s".format("DATASET:", t2 - t1))
 
     @st.cache
     def group_subreddit(raw_dataset):
@@ -50,7 +47,7 @@ def app():
         return sum_comments_per_user.merge(unique_subreddits_per_user, on="user")
 
     @st.cache
-    def filter_dataset(u_comments, u_reddit, r_comments, r_users, include_over18):
+    def filter_dataset(u_comments, u_reddit, r_comments, r_users, include_over18, alpha):
         """
 
         :param u_comments: The minimum total number of comments a user should have.
@@ -62,17 +59,18 @@ def app():
         """
         # filter user
         print("Filter")
+
         raw_dataset = read_csv_cached(REDDIT_DATASET)
-        raw_dataset['count'] = raw_dataset['count'].astype(np.int16)
 
-        user_grouped = group_user(raw_dataset)
-        subreddit_grouped = group_subreddit(raw_dataset)
+        # group user on raw dataset
+        raw_user_grouped = group_user(raw_dataset)
+        raw_subreddit_grouped = group_subreddit(raw_dataset)
 
-        this_user = user_grouped[(user_grouped.unique_subreddits >= u_reddit)
-                                 & (user_grouped.total_num_comments >= u_comments)]
+        this_user = raw_user_grouped[(raw_user_grouped.unique_subreddits >= u_reddit)
+                                     & (raw_user_grouped.total_num_comments >= u_comments)]
 
-        this_subreddit = subreddit_grouped[(subreddit_grouped.unique_users >= r_users)
-                                           & (subreddit_grouped.total_num_comments >= r_comments)]
+        this_subreddit = raw_subreddit_grouped[(raw_subreddit_grouped.unique_users >= r_users)
+                                               & (raw_subreddit_grouped.total_num_comments >= r_comments)]
 
         filtered_df = raw_dataset[(raw_dataset.user.isin(this_user.user)) &
                                   (raw_dataset.subreddit.isin(this_subreddit.subreddit))]
@@ -81,6 +79,12 @@ def app():
         if not include_over18:
             subreddits_under18 = filtered_df.subreddit.isin(subreddit_info[~subreddit_info.over18].subreddit)
             filtered_df = filtered_df[subreddits_under18]
+
+        # group user on new, filtered dataset
+        user_grouped = group_user(filtered_df)
+        subreddit_grouped = group_subreddit(filtered_df)
+
+        filtered_df['count'] = filtered_df['count'] * alpha
 
         return filtered_df, user_grouped, subreddit_grouped
 
@@ -124,7 +128,6 @@ def app():
     def subreddit_details(subreddit):
         return subreddit_info[subreddit_info['subreddit'] == subreddit].to_numpy()[0]
 
-    t3 = time.time()
     # Sidebar
     st.sidebar.title("Configuration")
     filter_conf = st.sidebar.form(key="filter_conf")
@@ -146,6 +149,10 @@ def app():
 
     s_include_over18 = filter_conf.checkbox("Subreddits over 18?", value=state.reddit_config['include_over18'],
                                             help="Should subreddits be included that are not approved for minors?")
+
+    s_alpha = filter_conf.number_input("Alpha", value=state.reddit_config['alpha'], min_value=0,
+                                       help="Scales user interaction linearly.")
+
     s_config_name = filter_conf.text_input("Name",
                                            value=f"Subreddit_dataset_{len([d for d in state.datasets if d.id == 0]) + 1}",
                                            help="Give this configuration a name to find him later.")
@@ -161,6 +168,7 @@ def app():
             state.reddit_config['u_comments'] = s_u_comments
             state.reddit_config['u_reddit'] = s_u_reddit
             state.reddit_config['include_over18'] = s_include_over18
+            state.reddit_config['alpha'] = s_alpha
             state.reddit_config['name'] = s_config_name
             return True
 
@@ -168,14 +176,12 @@ def app():
         refresh_stats()
         st.sidebar.success("Successfully applied configuration to dataset.")
 
-    t4 = time.time()
-    print("{0:<20}{1:.3f}s".format("SIDEBAR:", t4 - t3))
-
     data, g_user, g_subreddit = filter_dataset(r_users=state.reddit_config['r_users'],
                                                r_comments=state.reddit_config['r_comments'],
                                                u_comments=state.reddit_config['u_comments'],
                                                u_reddit=state.reddit_config['u_reddit'],
-                                               include_over18=state.reddit_config['include_over18'])
+                                               include_over18=state.reddit_config['include_over18'],
+                                               alpha=state.reddit_config['alpha'])
 
     sd_c1, _, sd_c2 = st.sidebar.beta_columns([1, 2, 1])
     if sd_c1.button("Export", help="Exports the current dataset as csv file to the server folder."):
@@ -193,17 +199,8 @@ def app():
         state.datasets.append(dataset)
         st.sidebar.success(f"Dataset '{state.reddit_config['name']}' saved.")
 
-    t5 = time.time()
-    print("{0:<20}{1:.3f}s".format("FILTER:", t5 - t4))
     data_size, num_users, num_reddits = stats(data)
     st.title("Subreddit Dataset")
-
-    st.markdown("""Reddit is a social news platform, i.e. a huge collection of news and content created by users. Any 
-    user can create a post consisting of simple text, links, images, or videos. Other users can interact with these 
-    posts in the form of a comment or positive or negative feedback.  Reddit is divided into user-created sub-forums 
-    called subreddits, which categorize posts by topic. For example, the subreddit "Python" contains all kinds of 
-    information about Python. But this is not always so clear, as for example the subreddit "SubredditSimulator", 
-    where bots automatically generate content and users can react to it.""")
 
     st.markdown("""<div class="content-container">
     <div class="content-wrapper">
@@ -220,51 +217,12 @@ def app():
     </div>
     </div>""".format(data_size, num_users, num_reddits), unsafe_allow_html=True)
 
-    st.subheader("Histogram of Ratings")
-    hist_col1, hist_col2 = st.beta_columns([1, 1])
-
-    # describe = data['count'].describe().to_dict()
-    # print(describe)
-
-    preprocess_desc = {"Identity": "Keep the number of comments as they are in the dataset.",
-                       "Binary": "The number of comments no longer matters, only the fact that a user has interacted with a subreddit.",
-                       "KBinsDiscretizer": "Bin continuous data into intervals."}
-
-    @st.cache
-    def preprocess_func(df, methode, args):
-        df = df.copy(deep=True)
-        if methode == "Identity":
-            methode = df['count']
-        elif methode == "Binary":
-            methode = 1
-        elif methode == "KBinsDiscretizer":
-            est = KBinsDiscretizer(encode='ordinal', **args)
-            methode = est.fit_transform(df[['count']]) + 1
-        df['count'] = methode
-        return df
-
-    args = dict()
-    preprocess_methode = hist_col1.selectbox("Ratings preprocessing",
-                                             options=['Identity', 'Binary', 'KBinsDiscretizer'],
-                                             help="Select a preprocessing method")
-    hist_col1.markdown(f"Details: {preprocess_desc[preprocess_methode]}")
-    if preprocess_methode == "KBinsDiscretizer":
-        args = dict(strategy=hist_col1.selectbox("Strategy used to define the widths of the bins",
-                                                 options=['quantile', 'uniform', 'kmeans']),
-                    n_bins=hist_col1.number_input("The number of bins to produce", value=5, min_value=2, max_value=100,
-                                                  step=1))
-    data = preprocess_func(data, preprocess_methode, args)
-
-    @st.cache
-    def histogram():
-        layout = go.Layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                           height=250, width=400, margin=dict(l=10, r=10, t=10, b=10))
-        return go.Figure(data=go.Histogram(x=data['count'].iloc[:], nbinsx=50), layout=layout)
-
-    t5 = time.time()
-    hist_col2.plotly_chart(histogram(), use_container_width=True)
-    t6 = time.time()
-    print("{0:<20}{1:.3f}s".format("HISTOGRAM:", t6 - t5))
+    st.beta_container().markdown("""Reddit is a social news platform, i.e. a huge collection of news and content created by users. Any 
+    user can create a post consisting of simple text, links, images, or videos. Other users can interact with these 
+    posts in the form of a comment or positive or negative feedback.  Reddit is divided into user-created sub-forums 
+    called subreddits, which categorize posts by topic. For example, the subreddit "Python" contains all kinds of 
+    information about Python. But this is not always so clear, as for example the subreddit "SubredditSimulator", 
+    where bots automatically generate content and users can react to it.""")
 
     c1, c2, c3 = st.beta_columns([2, 1, 1])
     c1.subheader("Top Subreddits")
@@ -282,24 +240,31 @@ def app():
                                 help="Should the top users be displayed sorted by the number of comments or the number "
                                      "of unique subreddits they commented on.")
     st.plotly_chart(group_user_plot(g_user, limit=n_top_users, sort=sort_column_user), use_container_width=True)
-    t7 = time.time()
-    print("{0:<20}{1:.3f}s".format("CHARTS:", t7 - t6))
+
+    st.subheader("Histogram of Interactions")
+
+    @st.cache
+    def histogram():
+        layout = go.Layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                           height=250, width=400, margin=dict(l=10, r=10, t=10, b=10))
+        return go.Figure(data=go.Histogram(x=data['count'].iloc[:], nbinsx=50), layout=layout)
+
+    st.plotly_chart(histogram(), use_container_width=True)
 
     st.subheader("Subreddit and User details")
     with st.beta_expander("Subreddit details"):
-        detail_subreddit = st.selectbox("Subreddit", options=data['subreddit'].unique())
+        detail_subreddit = st.selectbox("Subreddit", options=g_subreddit['subreddit'])
         _, num_subscribers, over18, public_description = subreddit_details(subreddit=detail_subreddit)
         st.subheader("Description")
         st.markdown(public_description)
-        st.markdown("{0:,} Subscribers".format(num_subscribers))
+        st.markdown("---")
+        st.markdown("{0:n} Subscribers".format(num_subscribers))
         st.markdown("{0}".format("🔞" if over18 else "No age restriction."))
         st.markdown(f"[Link to forum](https://www.reddit.com/r/{detail_subreddit}/)")
 
-    with st.beta_expander("User details"):
-        detail_user = st.selectbox("User", options=data['user'].unique())
-        st.write(data[data['user'] == detail_user][['subreddit', 'count']])
-    t8 = time.time()
-    print("{0:<20}{1:.3f}s".format("DETAILS:", t8 - t7))
-    print("-" * 26)
+    with st.beta_expander("User details", ):
+        detail_user = st.selectbox("User", options=g_user['user'])
+        c1, c2 = st.beta_columns([1, 1])
+        c1.dataframe(data[data['user'] == detail_user][['subreddit', 'count']].reset_index(drop=True), height=1000)
 
-    print(state.reddit_config)
+    st.write()

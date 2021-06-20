@@ -14,6 +14,6 @@ check_all_datasets()
 # Set default values in Session State
 state = session_get(datasets=[],
                     reddit_config=dict(u_comments=20, u_reddit=20, r_comments=100, r_users=100, include_over18=False,
-                                       name="Subreddit_dataset_1"))
+                                       alpha=1, name="Subreddit_dataset_1"))
 print("Current session_state:", state.__dict__)
 handler.run()

@@ -5,6 +5,7 @@ from src.frontend.SessionState import session_get
 from src.frontend.util import force_rerun
 from src.frontend.util import timer
 
+
 @timer
 def app():
     state = session_get()

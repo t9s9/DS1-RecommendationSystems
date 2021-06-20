@@ -57,7 +57,7 @@ def app():
         if conf_datasets == "ALS":
             for i in config['datasets_id']:
                 this_dataset = state.datasets[i]
-                progress_text.write("Creating dataset...")
+                progress_text.write("Creating dataset... (dataframe -> sparse item-user matrix)")
                 model = ImplicitModelWrapper(dataset=this_dataset, iterations=config['iterations'],
                                              factors=config['factors'], regularization=config['regularization'],
                                              test_size=config['test_ratio'])
@@ -100,6 +100,11 @@ def app():
         st.header("Training results")
         st.subheader("ALS")
         als_result_df = pd.DataFrame(als_result_df).set_index(['tid', 'name'])
+
+        def highlight_max(s):
+            return ["background-color : red"]
+
+        als_result_df.style.apply(highlight_max)
         st.write(als_result_df)
 
         with st.beta_expander("Choose a trained model for inference:"):
