@@ -328,7 +328,6 @@ if (counter+anti_counter) != 0:
             ratings.sort(key=lambda x: (1-x[0]),reverse=True)
 
         print(ratings)
-        print("Nice one :D")
 
         df_rating = pd.DataFrame({"item": [item_dict[str(x[1])]["name"] for x in ratings],"win rate": ["{:.2f}%".format((1-x[0])*100) for x in ratings],"sample size": [winning_items[x[1]][1] for x in ratings],"effective score": ["{:.8f}".format(get_leading(average_win_rate,1-x[0])*((1-x[0])-average_win_rate)**2/(x[2]+1)) for x in ratings]})
         st.table(df_rating)
