@@ -1,17 +1,14 @@
-import time
 from copy import deepcopy
 
-import numpy as np
 import plotly.graph_objs as go
 import streamlit as st
-from sklearn.preprocessing import KBinsDiscretizer
 
 import src.frontend.page_handling as page_handling
+from src.frontend.dataset import DatasetWrapper
 from src.frontend.util import read_csv_cached
 from .SessionState import session_get
 from .util import timer
 from ..data import REDDIT_DATASET, REDDIT_META
-from src.frontend.dataset import DatasetWrapper
 
 
 @timer
@@ -28,7 +25,6 @@ def app():
         return df.shape[0], df['user'].nunique(), df['subreddit'].nunique()
 
     subreddit_info = read_csv_cached(REDDIT_META)
-
 
     @st.cache
     def group_subreddit(raw_dataset):
@@ -141,7 +137,7 @@ def app():
                                            "dataset.")
     s_u_comments = filter_conf.slider("Min. Comment per User",
                                       value=state.reddit_config['u_comments'], min_value=0, max_value=200, step=10,
-                                      help="The minimum number total number of comments a user must have written,")
+                                      help="The minimum total number of comments a user must have written,")
     s_u_reddit = filter_conf.slider("Min. Subreddit per User",
                                     value=state.reddit_config['u_reddit'], min_value=0, max_value=200, step=10,
                                     help="The number of different subreddits that a user must have commented on to be "
@@ -155,7 +151,7 @@ def app():
 
     s_config_name = filter_conf.text_input("Name",
                                            value=f"Subreddit_dataset_{len([d for d in state.datasets if d.id == 0]) + 1}",
-                                           help="Give this configuration a name to find him later.")
+                                           help="Give this configuration a name to find it later.")
 
     def refresh_stats():
         # Check for duplicate name
@@ -217,12 +213,10 @@ def app():
     </div>
     </div>""".format(data_size, num_users, num_reddits), unsafe_allow_html=True)
 
-    st.beta_container().markdown("""Reddit is a social news platform, i.e. a huge collection of news and content created by users. Any 
-    user can create a post consisting of simple text, links, images, or videos. Other users can interact with these 
-    posts in the form of a comment or positive or negative feedback.  Reddit is divided into user-created sub-forums 
-    called subreddits, which categorize posts by topic. For example, the subreddit "Python" contains all kinds of 
-    information about Python. But this is not always so clear, as for example the subreddit "SubredditSimulator", 
-    where bots automatically generate content and users can react to it.""")
+    st.beta_container().markdown("""Reddit is a social news platform, i.e. a huge collection of news and content 
+    created by users. Any user can create a post consisting of simple text, links, images, or videos. Other users can 
+    interact with these posts in the form of a comment or positive or negative feedback.  Reddit is divided into 
+    user-created sub-forums called subreddits, which categorize posts by topic. """)
 
     c1, c2, c3 = st.beta_columns([2, 1, 1])
     c1.subheader("Top Subreddits")

@@ -1,5 +1,5 @@
-import pandas as pd
 import streamlit as st
+
 import src.frontend.page_handling as page_handling
 from src.frontend.SessionState import session_get
 from src.frontend.util import force_rerun
@@ -26,6 +26,12 @@ def app():
     if st.button("Run algorithms"):
         page_handling.handler.set_page("als")
 
+    # map shot description of dataset attr. to long description to display in menu
+    reddit_attribute_mapping = dict(r_users="Min. User per Subreddit", r_comments="Min. Comment per Subreddit",
+                                    u_comments="Min. Comment per User", u_reddit="Min. Subreddit per User",
+                                    include_over18="Subreddits over 18?", alpha="Alpha")
+    lol_attribute_mapping = dict()  # TODO
+
     if state.datasets:
         st.subheader("Configured dataset:")
         st.markdown("<div class='separator'></div>", unsafe_allow_html=True)
@@ -33,7 +39,8 @@ def app():
             # three cols for 'css hack'
             c1, _, c2 = st.beta_columns([8, 2, 1])
 
-            x = ", ".join(f"{i}={j}" for i, j in dataset.parameter.items())
+            mapping = reddit_attribute_mapping if dataset.id == 0 else lol_attribute_mapping
+            x = "".join(f"<pre>{mapping[i]}: {j}</pre>" for i, j in dataset.parameter.items())
 
             c1.markdown("""
             <div class='dataset'>

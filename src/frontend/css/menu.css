@@ -32,15 +32,13 @@ div[data-testid="stBlock"]:nth-child(3) > div > div > div > button {
     visibility: hidden;
     width: 400px;
     background-color: rgb(19, 23, 32);
-    color: #F0F2F6;
-    text-align: center;
-    padding: 10px 0;
+    padding: 6px;
     border-radius: 6px;
     border: #393a47 solid 1px;
 
     position: absolute;
     z-index: 1;
-    bottom: 100%;
+    bottom: 150%;
     left: 50%;
     margin-left: -200px;
 }

@@ -1,12 +1,12 @@
-import pandas as pd
-import streamlit as st
-import src.frontend.page_handling as page_handling
-
-from src.frontend.SessionState import session_get
-from src.frontend.util import timer
 import threading
 
+import pandas as pd
+import streamlit as st
+
+import src.frontend.page_handling as page_handling
 from src.algorithm.als.model_wrapper import ImplicitModelWrapper
+from src.frontend.SessionState import session_get
+from src.frontend.util import timer
 
 
 def als_configuration(datasets):
@@ -139,8 +139,11 @@ def app():
                     col1, col2 = st.beta_columns([1, 1])
                     col1.markdown("Recommendations")
                     col1.write(inference_model.recommend(user=recommend_user, N=recommend_n, as_df=True))
-                    col2.markdown("True ratings")
+                    col2.markdown("True ratings train set")
                     col2.write(inference_model.get_user_ratings(user=recommend_user, as_df=True))
+                    if this_dataset.sparse_data_test is not None:
+                        col2.markdown("True ratings test set")
+                        col2.write(inference_model.get_user_ratings_test(user=recommend_user, as_df=True))
 
                 st.subheader("Find the top N similar item to an item")
                 col1, col2 = st.beta_columns([2, 1])
