@@ -88,15 +88,21 @@ def coldcase_prediction(items,current_dict,rating,all_items):
 """Taken from https://stackoverflow.com/a/16696317"""
 def download_file(url,local):
     local_filename = local
+    prog = st.progress(0)
+    st.write("Downloading database from public URL")
     # NOTE the stream=True parameter below
-    with requests.get(url, stream=True) as r:
+    with requests.get(url, stream=True,verify=False) as r:
         r.raise_for_status()
+        total_size = 0
         with open(local_filename, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=8192): 
+            for chunk in r.iter_content(chunk_size=65565): 
                 # If you have chunk encoded response uncomment if
                 # and set chunk_size parameter to None.
                 #if chunk: 
                 f.write(chunk)
+                total_size+=len(chunk)
+                prog.progress(int(total_size*100/1000000000))
+    prog.progress(100)
     return local_filename
 
 
