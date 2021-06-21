@@ -58,6 +58,10 @@ div[data-testid="stBlock"]:nth-child(3) > div > div > div > button {
     visibility: visible;
 }
 
+.dataset:hover {
+    color: #F63366;
+}
+
 .name {
     font-weight: 500;
 }
