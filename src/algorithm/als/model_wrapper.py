@@ -82,6 +82,15 @@ class ImplicitModelWrapper:
             rating['item'] = rating['item'].apply(lambda x: self.dataset_train.get_item(x))
         return rating
 
+    def get_user_ratings_test(self, user, as_df=False):
+        userid = self.dataset_train.get_user_id(user)
+        rating = sorted(zip(self.dataset_test.user_item.getrow(userid).indices,
+                            self.dataset_test.user_item.getrow(userid).data), key=lambda x: x[1], reverse=True)
+        if as_df:
+            rating = pd.DataFrame(rating, columns=['item', 'rating'])
+            rating['item'] = rating['item'].apply(lambda x: self.dataset_train.get_item(x))
+        return rating
+
     def evaluate(self, metric="map", k=10):
         if self.dataset_test is None:
             raise ValueError("No test dataset specified.")
@@ -90,7 +99,7 @@ class ImplicitModelWrapper:
 
         score = ranking_metrics_at_k(model=self.model, K=k, train_user_items=self.dataset_train.user_item,
                                      test_user_items=self.dataset_test.user_item)[metric]
-        return dict(metric=metric, k=k, score=score)
+        return dict(score=score, k=k, metric=metric)
 
     def export(self):
         config = dict(iterations=self.iterations, factors=self.factors, regularization=self.regularization)

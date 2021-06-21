@@ -27,7 +27,7 @@ class PageHandler:
         return self.pages[self.current_page]()
 
 
-handler = PageHandler(start="als")
+handler = PageHandler(start="menu")
 handler.add_page(src.frontend.menu, "menu")
 handler.add_page(src.frontend.reddit_dataset, "reddit_dataset")
 handler.add_page(src.frontend.algorithm, "als")

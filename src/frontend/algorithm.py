@@ -1,10 +1,12 @@
+import threading
+
 import pandas as pd
 import streamlit as st
-import src.frontend.page_handling as page_handling
 
+import src.frontend.page_handling as page_handling
+from src.algorithm.als.model_wrapper import ImplicitModelWrapper
 from src.frontend.SessionState import session_get
 from src.frontend.util import timer
-import threading
 
 from src.algorithm.als.model_wrapper import ImplicitModelWrapper
 from src.algorithm.knn.model_wrapper import KNNModelWrapper
@@ -119,8 +121,15 @@ def app():
                 progress_updater.join()
 
                 model_data = model.export()
-                progress_text.write("Evaluating...")
-                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                model_data['test_ratio'] = config['test_ratio']
+
+                if this_dataset.sparse_data_test is not None:
+                    progress_text.write("Evaluating...")
+                    model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                else:
+                    model_data['evaluation'] = dict(score="", metric="", k="")
+                    st.info("An evaluation cannot be performed because no test set was specified.")
+
                 this_dataset.trainings_als.append(model_data)
                 progress_text.write("")
                 progress_bar.progress(0)
@@ -143,8 +152,10 @@ def app():
     for dataset in state.datasets:
         for i, training in enumerate(dataset.trainings_als):
             d = dict(tid=i + 1, name=dataset.name)
+            if 'evaluation' in training.keys():
+                d.update(training['evaluation'])
+                d['test_ratio'] = training['test_ratio']
             d.update(training['config'])
-            d.update(training['evaluation'])
             als_result_df.append(d)
         for i, training in enumerate(dataset.trainings_knn):
             d = dict(tid=i + 1, name=dataset.name)
@@ -155,9 +166,8 @@ def app():
         st.header("Training results")
         st.subheader("ALS")
         als_result_df = pd.DataFrame(als_result_df).set_index(['tid', 'name'])
-
-
         als_result_df.style.apply(highlight_max)
+        als_result_df = als_result_df
         st.write(als_result_df)
         print(als_result_df)
 
@@ -187,8 +197,11 @@ def app():
                     col1, col2 = st.beta_columns([1, 1])
                     col1.markdown("Recommendations")
                     col1.write(inference_model.recommend(user=recommend_user, N=recommend_n, as_df=True))
-                    col2.markdown("True ratings")
+                    col2.markdown("True ratings train set")
                     col2.write(inference_model.get_user_ratings(user=recommend_user, as_df=True))
+                    if this_dataset.sparse_data_test is not None:
+                        col2.markdown("True ratings test set")
+                        col2.write(inference_model.get_user_ratings_test(user=recommend_user, as_df=True))
 
                 st.subheader("Find the top N similar item to an item")
                 col1, col2 = st.beta_columns([2, 1])
