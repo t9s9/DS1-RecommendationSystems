@@ -219,6 +219,7 @@ def app():
 
         knn_result_df.style.apply(highlight_max)
         st.write(knn_result_df)
+        print(knn_result_df)
 
         with st.beta_expander("Choose a trained model for inference:"):
             active_training = st.selectbox("Current training", options=knn_result_df.index.values,key="unique",

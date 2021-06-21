@@ -35,6 +35,7 @@ class KNNModelWrapper:
         data = Dataset.load_from_df(dataset.data, reader)
         self.dataset_train, self.dataset_test = train_test_split(data,test_size=self.test_size)
 
+
         self.is_fitted = False
 
         self.model = KNNWithMeans(sim_options={"user_based": True, "name":"pearson"},k=self.k,min_k=5)
@@ -56,6 +57,8 @@ class KNNModelWrapper:
     def derive_from(self,train):
         self.model = train["user_factors"]
         self.model_item = train["item_factors"]
+        self.dataset_test = train["testset"]
+        self.dataset_train = train["trainset"]
         return self
 
     def fit_callback(self, iteration, time):
@@ -118,6 +121,9 @@ class KNNModelWrapper:
         if self.is_fitted:
             data['user_factors'] = self.model
             data['item_factors'] = self.model_item
+
+        data["testset"] = self.dataset_test
+        data["trainset"] = self.dataset_train
         return data
 
     def as_inference(self, user_factors, item_factors):

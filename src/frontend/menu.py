@@ -31,7 +31,7 @@ def app():
     reddit_attribute_mapping = dict(r_users="Min. User per Subreddit", r_comments="Min. Comment per Subreddit",
                                     u_comments="Min. Comment per User", u_reddit="Min. Subreddit per User",
                                     include_over18="Subreddits over 18?", alpha="Alpha")
-    lol_attribute_mapping = dict()  # TODO
+    lol_attribute_mapping = dict(poor_mans_choice="Cost effective rating for items", item_limit="Use a minimum sample size for the items", own_champ="The played champion",enemy_champ="The enemy champion to fight against")  # TODO
 
     if state.datasets:
         st.subheader("Configured dataset:")

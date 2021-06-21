@@ -24,6 +24,7 @@ from surprise.model_selection import GridSearchCV
 from .SessionState import session_get
 from .util import timer
 from src.frontend.dataset import DatasetWrapper
+import os
 
 def confidence_wilson_score2(wins, loses):
     n = wins + loses 
@@ -84,6 +85,19 @@ def coldcase_prediction(items,current_dict,rating,all_items):
             else:
                 current_dict[x] = (rating,1)
 
+"""Taken from https://stackoverflow.com/a/16696317"""
+def download_file(url,local):
+    local_filename = local
+    # NOTE the stream=True parameter below
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192): 
+                # If you have chunk encoded response uncomment if
+                # and set chunk_size parameter to None.
+                #if chunk: 
+                f.write(chunk)
+    return local_filename
 
 
 @timer
@@ -96,11 +110,16 @@ def app():
     state = session_get()
     st.title("The dataset")
     st.write("The dataset was created by crawling through the official Game API. Some minimal filtering have been applied to the dataset to clean it up and increase significance. Since the game is subject to frequent patches and balance updates, the data is highly volatile and significance declines rather fast. Therefore only games played in the last 100 days have been considered as input.")
+
+    if not os.path.exists("src/lol_dataset/league_of_legends.db"):
+        download_file("https://www.kava-i.de/league_of_legends.db","src/lol_dataset/league_of_legends.db")
+
     connection = sql.connect("src/lol_dataset/league_of_legends.db")
     cursor = connection.cursor()
     total_games = 0
     max_game_length = 0
     min_game_creation = 0
+
 
     for row in cursor.execute("SELECT MAX(game_duration) from matches"):
         max_game_length = row[0]
@@ -236,7 +255,7 @@ def app():
                 print(df)
 
 
-                dataset = DatasetWrapper(name=name, data=df,id=1, param={"own_champ": own_champ,"enemy_champ": other_champ, "item_limit": 0, "poor_mans_choice": False})
+                dataset = DatasetWrapper(name=name, data=df,id=1, param={"own_champ": options,"enemy_champ": options2, "item_limit": 0, "poor_mans_choice": False})
                 state.datasets.append(dataset)
                 st.sidebar.success(f"Dataset '{name}' saved.")
 
