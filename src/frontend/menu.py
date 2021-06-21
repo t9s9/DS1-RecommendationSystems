@@ -20,6 +20,7 @@ def app():
     if q1.button("Subreddit"):
         page_handling.handler.set_page("reddit_dataset")
     if q2.button("League of Legends"):
+        page_handling.handler.set_page("lol_dataset")
         pass
 
     st.subheader("Algorithms")

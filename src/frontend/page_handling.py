@@ -1,6 +1,7 @@
 import src.frontend.algorithm
 import src.frontend.menu
 import src.frontend.reddit_dataset
+import src.frontend.lol_dataset
 from src.frontend.util import force_rerun
 
 
@@ -26,7 +27,8 @@ class PageHandler:
         return self.pages[self.current_page]()
 
 
-handler = PageHandler(start="reddit_dataset")
+handler = PageHandler(start="als")
 handler.add_page(src.frontend.menu, "menu")
 handler.add_page(src.frontend.reddit_dataset, "reddit_dataset")
 handler.add_page(src.frontend.algorithm, "als")
+handler.add_page(src.frontend.lol_dataset, "lol_dataset")

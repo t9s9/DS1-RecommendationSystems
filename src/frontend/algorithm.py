@@ -7,6 +7,7 @@ from src.frontend.util import timer
 import threading
 
 from src.algorithm.als.model_wrapper import ImplicitModelWrapper
+from src.algorithm.knn.model_wrapper import KNNModelWrapper
 
 
 def als_configuration(datasets):
@@ -33,12 +34,46 @@ def als_configuration(datasets):
 
     return submit, conf
 
+def highlight_max(s):
+    return ["background-color : red"]
+
+def knn_configuration(datasets):
+    dataset_names = [d.name for d in datasets]
+    form = st.form(key="knn_conf")
+    conf = {}
+    with form:
+
+        conf['datasets'] = st.multiselect(label="Datasets", options=dataset_names)
+        st.markdown("---")
+        conf["cluster_k"] = st.slider(label="Select Cluster value k",min_value=0,max_value=100,value=10)
+        conf["iterations"] = st.slider(label="Select iterations",min_value=0,max_value=100,value=10)
+        conf["learn_rate"] = st.slider(label="Select learn rate",min_value=0.0,max_value=0.1,step=0.0001,value=0.0,format="%f")
+        st.markdown("---")
+        conf["train_test"] = st.number_input("Test ratio", min_value=0.0, max_value=1.0, value=0.1, step=0.1,help="")
+        conf["metric"] = st.selectbox("Metric", options=["map"])
+        conf['metric_k'] = st.number_input("Top k", min_value=1, step=1, value=10, help="")
+        submit = st.form_submit_button("Start")
+        if submit:
+            conf['datasets_id'] = []
+            for i in conf['datasets']:
+                conf['datasets_id'].append(dataset_names.index(i))
+    return submit,conf
+
+
+
+def run_knn(datasets):
+
+    selects = st.sidebar.multiselect("Select the items you have already bought",["a","b"])
+    val = st.sidebar.slider(label="Select min sample size for calculation",min_value=0,max_value=20,value=10)
+
+    for x in datasets:
+        st.write(x)
 
 @timer
 def app():
     state = session_get()
 
-    if st.button("Back"):
+    if st.sidebar.button("Back"):
         page_handling.handler.set_page("menu")
 
     st.title("Algorithm")
@@ -52,12 +87,13 @@ def app():
         conf_datasets = st.selectbox(label="Algorithm", options=["ALS", "KNN"])
         if conf_datasets == "ALS":
             start, config = als_configuration(state.datasets)
+        elif conf_datasets == "KNN":
+            start, config = knn_configuration(state.datasets)
 
     if start:
         if conf_datasets == "ALS":
             for i in config['datasets_id']:
                 this_dataset = state.datasets[i]
-                progress_text.write("Creating dataset... (dataframe -> sparse item-user matrix)")
                 model = ImplicitModelWrapper(dataset=this_dataset, iterations=config['iterations'],
                                              factors=config['factors'], regularization=config['regularization'],
                                              test_size=config['test_ratio'])
@@ -88,24 +124,42 @@ def app():
                 this_dataset.trainings_als.append(model_data)
                 progress_text.write("")
                 progress_bar.progress(0)
+        elif conf_datasets == "KNN":
+            for i in config['datasets_id']:
+                this_dataset = state.datasets[i]
+                model = KNNModelWrapper(dataset=this_dataset)
+
+                model.fit()
+                running = False
+
+                model_data = model.export()
+                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                this_dataset.trainings_knn.append(model_data)
+                progress_bar.progress(0)
+
 
     als_result_df = []
+    knn_result_df = []
     for dataset in state.datasets:
         for i, training in enumerate(dataset.trainings_als):
             d = dict(tid=i + 1, name=dataset.name)
             d.update(training['config'])
             d.update(training['evaluation'])
             als_result_df.append(d)
+        for i, training in enumerate(dataset.trainings_knn):
+            d = dict(tid=i + 1, name=dataset.name)
+            d.update(training['config'])
+            d.update(training['evaluation'])
+            knn_result_df.append(d)
     if als_result_df:
         st.header("Training results")
         st.subheader("ALS")
         als_result_df = pd.DataFrame(als_result_df).set_index(['tid', 'name'])
 
-        def highlight_max(s):
-            return ["background-color : red"]
 
         als_result_df.style.apply(highlight_max)
         st.write(als_result_df)
+        print(als_result_df)
 
         with st.beta_expander("Choose a trained model for inference:"):
             active_training = st.selectbox("Current training", options=als_result_df.index.values,
@@ -145,3 +199,49 @@ def app():
 
                 if similar_item:
                     st.write(inference_model.similar_items(similar_item, similar_n, use_df=True))
+    if knn_result_df:
+        st.header("Training results")
+        st.subheader("KNN")
+        knn_result_df = pd.DataFrame(knn_result_df).set_index(['tid', 'name'])
+
+        knn_result_df.style.apply(highlight_max)
+        st.write(knn_result_df)
+
+        with st.beta_expander("Choose a trained model for inference:"):
+            active_training = st.selectbox("Current training", options=knn_result_df.index.values,key="unique",
+                                           format_func=lambda x: f"Training: {x[0]} - Dataset: {x[1]}")
+
+            if active_training:
+                # find dataset
+                dataset_id = [d.name for d in state.datasets].index(active_training[1])
+                this_dataset = state.datasets[dataset_id]
+                this_training = this_dataset.trainings_knn[active_training[0] - 1]
+
+                inference_model = KNNModelWrapper(this_dataset).derive_from(this_training)
+
+                st.subheader("Recommend the top N items to an user")
+                col1, col2 = st.beta_columns([2, 1])
+                opts = [inference_model.dataset_train.to_raw_uid(x) for x in inference_model.dataset_train.all_users()]
+                recommend_user = col1.selectbox("User", options=opts,
+                                                help="Select a user for which item recommendations are to be made.", )
+                recommend_n = col2.number_input("N", help="The number of top recommendations", min_value=1, step=1,
+                                                value=10,
+                                                key="N_users2")
+                if recommend_user:
+                    col1, col2 = st.beta_columns([1, 1])
+                    col1.markdown("Recommendations")
+                    col1.write(inference_model.recommend(user=recommend_user, N=recommend_n, as_df=True))
+                    col2.markdown("True ratings")
+                    col2.write(inference_model.get_user_ratings(user=recommend_user, as_df=True))
+
+                opts_it = [inference_model.dataset_train.to_raw_iid(x) for x in inference_model.dataset_train.all_items()]
+                st.subheader("Find the top N similar item to an item")
+                col1, col2 = st.beta_columns([2, 1])
+                similar_item = col1.selectbox("Item", options=opts_it,
+                                              help="Select an item to find the most similar other items.")
+                similar_n = col2.number_input("N", min_value=1, step=1, value=10, key="N_items2",
+                                              help="The number of top similar items")
+
+                if similar_item:
+                    st.write(inference_model.similar_items(similar_item, similar_n, use_df=True))
+
