@@ -44,16 +44,18 @@ def knn_configuration(datasets):
     form = st.form(key="knn_conf")
     conf = {}
     with form:
-
         conf['datasets'] = st.multiselect(label="Datasets", options=dataset_names)
         st.markdown("---")
         conf["cluster_k"] = st.slider(label="Select Cluster value k",min_value=0,max_value=100,value=10)
-        conf["iterations"] = st.slider(label="Select iterations",min_value=0,max_value=100,value=10)
-        conf["learn_rate"] = st.slider(label="Select learn rate",min_value=0.0,max_value=0.1,step=0.0001,value=0.0,format="%f")
+        conf["similarity"] = st.selectbox(label="Select similarity metric", options=["cosine","msd","pearson","pearson_baseline"])
         st.markdown("---")
-        conf["train_test"] = st.number_input("Test ratio", min_value=0.0, max_value=1.0, value=0.1, step=0.1,help="")
-        conf["metric"] = st.selectbox("Metric", options=["map"])
-        conf['metric_k'] = st.number_input("Top k", min_value=1, step=1, value=10, help="")
+        conf["metric"] = st.selectbox("Metric", options=["mae","mse","map"])
+
+        conf['thresh_metric'] = st.number_input("Threshold for recommendation", min_value=0.0, max_value=100.0, value=0.1, step=0.1,
+                                                      help="")
+        conf['metric_k'] = st.number_input("Top k (only used when metric is map)", min_value=1, step=1, value=10, help="")
+
+        conf['cross_validation_folds'] = st.number_input("Cross validation folds", min_value=2, step=1, value=10, help="")
         submit = st.form_submit_button("Start")
         if submit:
             conf['datasets_id'] = []
@@ -136,13 +138,13 @@ def app():
         elif conf_datasets == "KNN":
             for i in config['datasets_id']:
                 this_dataset = state.datasets[i]
-                model = KNNModelWrapper(dataset=this_dataset)
+                model = KNNModelWrapper(dataset=this_dataset,k=config["cluster_k"], sim=config["similarity"])
 
                 model.fit()
                 running = False
 
                 model_data = model.export()
-                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config["metric_k"], cross_validation_folds=config['cross_validation_folds'],thresh= config['thresh_metric'])
                 this_dataset.trainings_knn.append(model_data)
                 progress_bar.progress(0)
 
