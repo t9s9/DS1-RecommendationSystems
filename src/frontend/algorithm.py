@@ -15,16 +15,26 @@ def als_configuration(datasets):
 
     conf = dict()
     conf_widget = st.form(key="inf_conf")
-    conf['datasets'] = conf_widget.multiselect(label="Datasets", options=dataset_names)
+    conf['datasets'] = conf_widget.multiselect(label="Datasets", options=dataset_names,
+                                               help="Choose multiple datasets to run on ALS")
     conf_widget.markdown("---")
-    conf['iterations'] = conf_widget.number_input("Iterations", min_value=1, value=10, step=1, help="")
-    conf['factors'] = conf_widget.number_input("Factors", min_value=1, value=64, step=1, help="")
-    conf['regularization'] = conf_widget.number_input("Regularization", value=0.1, step=0.001, format="%.4f", help="")
+    conf['iterations'] = conf_widget.number_input("Iterations", min_value=1, value=10, step=1,
+                                                  help="The number of iterations. In each iteration the user and item "
+                                                       "factor were calculated separately.")
+    conf['factors'] = conf_widget.number_input("Factors", min_value=1, value=64, step=1,
+                                               help="The number of latent factors f to use in the matrix decomposition.")
+    conf['regularization'] = conf_widget.number_input("Regularization", value=0.1, step=0.001, format="%.4f",
+                                                      help="The regularization strength lambda.")
     conf_widget.markdown("---")
     conf['test_ratio'] = conf_widget.number_input("Test ratio", min_value=0.0, max_value=1.0, value=0.1, step=0.1,
-                                                  help="")
-    conf['metric'] = conf_widget.selectbox("Metric", options=["map", "precision", "auc"])
-    conf['metric_k'] = conf_widget.number_input("Top k", min_value=1, step=1, value=10, help="")
+                                                  help="The proportion of the dataset that should be used for testing. "
+                                                       "It have to be in [0, 1). If set to zero the no evaluation "
+                                                       "is performed.")
+    conf['metric'] = conf_widget.selectbox("Metric", options=["map", "precision", "auc"],
+                                           help="The metric used for evaluation: Mean Average Precision, Precision "
+                                                "and Area under the curve")
+    conf['metric_k'] = conf_widget.number_input("Top k", min_value=1, step=1, value=10,
+                                                help="Number of top values to include into the evaluation")
     conf['cross_validation_folds'] = conf_widget.number_input("Cross validation folds", min_value=0, step=1, value=0,
                                                               help="Perform a cross validation with the given number "
                                                                    "of folds. The test ratio is ignored. If set to zero"
@@ -52,22 +62,28 @@ def knn_configuration(datasets):
     form = st.form(key="knn_conf")
     conf = {}
     with form:
-        conf['datasets'] = st.multiselect(label="Datasets", options=dataset_names)
+        conf['datasets'] = st.multiselect(label="Datasets", options=dataset_names,
+                                          help="Choose multiple datasets to run them on KNN")
         st.markdown("---")
-        conf["cluster_k"] = st.slider(label="Select Cluster value k", min_value=0, max_value=100, value=10)
+        conf["cluster_k"] = st.slider(label="Select value k", min_value=0, max_value=100, value=10,
+                                      help="The number of neighbors to take into account")
         conf["similarity"] = st.selectbox(label="Select similarity metric",
-                                          options=["cosine", "msd", "pearson", "pearson_baseline"])
+                                          options=["cosine", "msd", "pearson", "pearson_baseline"],
+                                          help="Specify a distance metric for KNN")
         st.markdown("---")
-        conf["metric"] = st.selectbox("Metric", options=["mae", "mse", "map"])
+        conf["metric"] = st.selectbox("Metric", options=["mae", "mse", "map"],
+                                      help="The metric used for evaluation: Mean average error, Mean squared error,"
+                                           "and mean average precision")
 
         conf['thresh_metric'] = st.number_input("Threshold for recommendation", min_value=0.0, max_value=100.0,
                                                 value=0.1, step=0.1,
-                                                help="")
+                                                help="The threshold for the rating during evaluation")
         conf['metric_k'] = st.number_input("Top k (only used when metric is map)", min_value=1, step=1, value=10,
-                                           help="")
+                                           help="Number of top values to include into the evaluation")
 
         conf['cross_validation_folds'] = st.number_input("Cross validation folds", min_value=2, step=1, value=10,
-                                                         help="")
+                                                         help="Perform a cross validation with the given number of "
+                                                              "folds.")
 
         submit = st.form_submit_button("Start")
         if submit:
