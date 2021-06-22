@@ -1,32 +1,20 @@
-import streamlit as st
-import sqlite3 as sql
-import pandas as pd
-import matplotlib.pyplot as plt
 import json
-import requests
-from tqdm import trange
+import os
+import sqlite3 as sql
 import time
-import numpy as np
-from scipy import stats
 from math import sqrt
-from surprise import SVD
-from surprise import NMF
-from surprise.prediction_algorithms.knns import KNNBaseline
-from surprise.prediction_algorithms.knns import KNNBasic
-from surprise.prediction_algorithms.knns import KNNWithMeans
-from surprise import Dataset
-from surprise import Reader
-from surprise.model_selection import cross_validate
-from surprise.prediction_algorithms.slope_one import SlopeOne
-from surprise.prediction_algorithms.co_clustering import CoClustering
+
+import numpy as np
+import pandas as pd
+import requests
+import streamlit as st
+
 import src.frontend.page_handling as page_handling
-from surprise.model_selection import GridSearchCV
+from src.frontend.dataset import DatasetWrapper
 from .SessionState import session_get
 from .util import timer
-from src.frontend.dataset import DatasetWrapper
-import os
 
-def is_item(item,all_items):
+def is_item(item, all_items):
     if item == 0:
         return False
     if "into" in all_items[str(item)]:
@@ -35,66 +23,72 @@ def is_item(item,all_items):
         return all_items[str(item)]["gold"]["total"] != 0
     return False
 
+
 """
 Taken from https://www.mikulskibartosz.name/wilson-score-in-python-example
 """
-def confidence_wilson_score(p, n, z = 1.44):
-    denominator = 1 + z**2/n
-    centre_adjusted_probability = p + z*z / (2*n)
-    adjusted_standard_deviation = sqrt((p*(1 - p) + z*z / (4*n)) / n)
-    
-    lower_bound = (centre_adjusted_probability - z*adjusted_standard_deviation) / denominator
-    upper_bound = (centre_adjusted_probability + z*adjusted_standard_deviation) / denominator
+def confidence_wilson_score(p, n, z=1.44):
+    denominator = 1 + z ** 2 / n
+    centre_adjusted_probability = p + z * z / (2 * n)
+    adjusted_standard_deviation = sqrt((p * (1 - p) + z * z / (4 * n)) / n)
+
+    lower_bound = (centre_adjusted_probability - z * adjusted_standard_deviation) / denominator
+    upper_bound = (centre_adjusted_probability + z * adjusted_standard_deviation) / denominator
     return (lower_bound, upper_bound)
 
-def add_item(lst,lst2,lst3,itm,counter,rating):
+
+def add_item(lst, lst2, lst3, itm, counter, rating):
     if itm != 0:
         lst.append(itm)
         lst2.append(counter)
         lst3.append(rating)
 
-def add_item_full(lst,items,counter,win,win_items,thresh,all_items):
-    for x in ["item0","item1","item2","item3","item4","item5","item6"]:
-        if not is_item(items[x],all_items):
+
+def add_item_full(lst, items, counter, win, win_items, thresh, all_items):
+    for x in ["item0", "item1", "item2", "item3", "item4", "item5", "item6"]:
+        if not is_item(items[x], all_items):
             continue
         if win_items[items[x]][1] > thresh:
-            add_item(lst["itemID"],lst["userID"],lst["rating"],items[x],counter,1-(win_items[items[x]][0]/win_items[items[x]][1]))
+            add_item(lst["itemID"], lst["userID"], lst["rating"], items[x], counter,
+                     1 - (win_items[items[x]][0] / win_items[items[x]][1]))
         else:
-            add_item(lst["itemID"],lst["userID"],lst["rating"],items[x],counter,1)
+            add_item(lst["itemID"], lst["userID"], lst["rating"], items[x], counter, 1)
 
 
-def get_leading(average_win_rate,p):
+def get_leading(average_win_rate, p):
     if average_win_rate < p:
         return 1
     return -1
 
 
-
-def coldcase_prediction(items,current_dict,rating,all_items):
+def coldcase_prediction(items, current_dict, rating, all_items):
     for x in items:
         if x != 0:
             if x in current_dict:
-                current_dict[x] = (current_dict[x][0]+rating,current_dict[x][1]+1)
+                current_dict[x] = (current_dict[x][0] + rating, current_dict[x][1] + 1)
             else:
-                current_dict[x] = (rating,1)
+                current_dict[x] = (rating, 1)
+
 
 """Taken from https://stackoverflow.com/a/16696317"""
-def download_file(url,local,stream=True,verify=False):
+
+
+def download_file(url, local, stream=True, verify=False):
     local_filename = local
     prog = st.progress(0)
     st.write("Downloading database from public URL")
     # NOTE the stream=True parameter below
-    with requests.get(url, stream=stream,verify=verify) as r:
+    with requests.get(url, stream=stream, verify=verify) as r:
         r.raise_for_status()
         total_size = 0
         with open(local_filename, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=65565): 
+            for chunk in r.iter_content(chunk_size=65565):
                 # If you have chunk encoded response uncomment if
                 # and set chunk_size parameter to None.
-                #if chunk: 
+                # if chunk:
                 f.write(chunk)
-                total_size+=len(chunk)
-                prog.progress(int(total_size*100/1000000000))
+                total_size += len(chunk)
+                prog.progress(int(total_size * 100 / 1000000000))
     prog.progress(100)
     return local_filename
 
@@ -105,17 +99,20 @@ def app():
         if st.button("Back"):
             page_handling.handler.set_page("menu")
             return
-     
+
     state = session_get()
     st.title("The dataset")
-    st.write("The dataset was created by crawling through the official Game API. Some minimal filtering have been applied to the dataset to clean it up and increase significance. Since the game is subject to frequent patches and balance updates, the data is highly volatile and significance declines rather fast. Therefore only games played in the last 100 days have been considered as input.")
+    st.write(
+        "The dataset was created by crawling through the official Game API. Some minimal filtering have been applied to the dataset to clean it up and increase significance. Since the game is subject to frequent patches and balance updates, the data is highly volatile and significance declines rather fast. Therefore only games played in the last 100 days have been considered as input.")
 
     if not os.path.exists("data/lol_dataset/league_of_legends.db"):
-        download_file("https://www.kava-i.de/league_of_legends.db","data/lol_dataset/league_of_legends.db")
+        download_file("https://www.kava-i.de/league_of_legends.db", "data/lol_dataset/league_of_legends.db")
     if not os.path.exists("data/lol_dataset/champion.json"):
-        download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/champion.json","data/lol_dataset/champion.json")
+        download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/champion.json",
+                      "data/lol_dataset/champion.json")
     if not os.path.exists("data/lol_dataset/item.json"):
-        download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/item.json","data/lol_dataset/items.json")
+        download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/item.json",
+                      "data/lol_dataset/items.json")
 
     connection = sql.connect("data/lol_dataset/league_of_legends.db")
     cursor = connection.cursor()
@@ -123,37 +120,35 @@ def app():
     max_game_length = 0
     min_game_creation = 0
 
-
     for row in cursor.execute("SELECT MAX(game_duration) from matches"):
         max_game_length = row[0]
 
     for row in cursor.execute("SELECT MIN(creation_time) from matches"):
         min_game_creation = row[0]
 
-    min_game_creation = -int((int(time.time()*1000) - min_game_creation)/(1000*60*60*24))
+    min_game_creation = -int((int(time.time() * 1000) - min_game_creation) / (1000 * 60 * 60 * 24))
 
     for row in cursor.execute("SELECT COUNT(champion_id) from matches"):
-        st.write("A total of ",row[0]," games have been found in the database with the given filters.")
+        st.write("A total of ", row[0], " games have been found in the database with the given filters.")
         total_games = row[0]
 
-    st.write("This is ",100,"% of the whole dataset.")
-
+    st.write("This is ", 100, "% of the whole dataset.")
 
     st.title("Showcase")
-    col1, col2, col3 = st.beta_columns([1,1,1])
+    col1, col2, col3 = st.beta_columns([1, 1, 1])
     col2.button("Reset showcase")
 
-    js = json.loads(open("src/lol_dataset/champion.json","r").read())
+    js = json.loads(open("src/lol_dataset/champion.json", "rb").read().decode(encoding='utf-8'))
     champions = []
     champion_dict = {}
     for x in js["data"]:
         champions.append(x)
-        champion_dict[x] = (int(js["data"][x]["key"]),js["data"][x]["blurb"])
+        champion_dict[x] = (int(js["data"][x]["key"]), js["data"][x]["blurb"])
 
     create_constrains = ""
-    col1, col3,col2 = st.beta_columns([3,1,3])
-    options = col1.selectbox('Select your champion',champions)
-    options2 = col2.selectbox('Select the enemy champion',champions)
+    col1, col3, col2 = st.beta_columns([3, 1, 3])
+    options = col1.selectbox('Select your champion', champions)
+    options2 = col2.selectbox('Select the enemy champion', champions)
 
     lore_url = "http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/champion/{}.json".format(options)
     lore_enemy_url = "http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/champion/{}.json".format(options2)
@@ -169,15 +164,15 @@ def app():
         item_dict[all_items[i]["name"]] = all_items[i]
         all_item_names.append(all_items[i]["name"])
 
-
-    col1.image("http://ddragon.leagueoflegends.com/cdn/img/champion/loading/{}_0.jpg".format(options),use_column_width="always")
+    col1.image("http://ddragon.leagueoflegends.com/cdn/img/champion/loading/{}_0.jpg".format(options),
+               use_column_width="always")
     with col1.beta_expander("See hero description"):
         st.write(lore_own["data"][options]["lore"])
 
-    col2.image("http://ddragon.leagueoflegends.com/cdn/img/champion/loading/{}_0.jpg".format(options2),use_column_width="always")
+    col2.image("http://ddragon.leagueoflegends.com/cdn/img/champion/loading/{}_0.jpg".format(options2),
+               use_column_width="always")
     with col2.beta_expander("See hero description"):
         st.write(lore_enemy["data"][options2]["lore"])
-
 
     own_champ = int(champion_dict[options][0])
     other_champ = int(champion_dict[options2][0])
@@ -188,34 +183,42 @@ def app():
     start_time = 0
     duration = 0
     prog = st.progress(0)
-    col1,col2, col3 = st.beta_columns([1,4,1])
+    col1, col2, col3 = st.beta_columns([1, 4, 1])
     frames = {"userID": [], "itemID": [], "rating": []}
     winning_items = {}
     running_counter = 0
     with col2.empty():
         prog.progress(0)
-        for row in cursor.execute("SELECT e.champion_id, e.items FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
-            counter+=1
+        for row in cursor.execute(
+                "SELECT e.champion_id, e.items FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id=" + str(
+                    own_champ) + " AND m.champion_id=" + str(other_champ)):
+            counter += 1
             items = json.loads(row[1])
-            coldcase_prediction([items["item0"],items["item1"],items["item2"],items["item3"],items["item4"],items["item5"],items["item6"]],winning_items,1,all_items)
+            coldcase_prediction(
+                [items["item0"], items["item1"], items["item2"], items["item3"], items["item4"], items["item5"],
+                 items["item6"]], winning_items, 1, all_items)
 
-        for row in cursor.execute("SELECT m.champion_id, e.items FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 0 AND m.win=1 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
-            anti_counter+=1
+        for row in cursor.execute(
+                "SELECT m.champion_id, e.items FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 0 AND m.win=1 AND e.champion_id=" + str(
+                    own_champ) + " AND m.champion_id=" + str(other_champ)):
+            anti_counter += 1
             items = json.loads(row[1])
-            coldcase_prediction([items["item0"],items["item1"],items["item2"],items["item3"],items["item4"],items["item5"],items["item6"]],winning_items,0,all_items)
+            coldcase_prediction(
+                [items["item0"], items["item1"], items["item2"], items["item3"], items["item4"], items["item5"],
+                 items["item6"]], winning_items, 0, all_items)
 
     prog.progress(100)
 
     val = 0
-    if (counter+anti_counter) != 0:
+    if (counter + anti_counter) != 0:
         winning_list = []
         for x in winning_items:
             if winning_items[x][1] >= val:
-                if not is_item(x,item_dict):
+                if not is_item(x, item_dict):
                     continue
-                estimated_p = winning_items[x][0]/winning_items[x][1]
+                estimated_p = winning_items[x][0] / winning_items[x][1]
                 cost = item_dict[str(x)]["gold"]["total"]
-                winning_list.append((estimated_p,x,cost))
+                winning_list.append((estimated_p, x, cost))
 
         games = []
 
@@ -232,42 +235,55 @@ def app():
         outcomes = np.array(games)
 
         with st.sidebar.form(key='my_form'):
-            side = st.slider("Select the game length in minutes:",min_value=0,max_value=int(max_game_length/60),value=(0,10))
-            side2 = st.slider("Select the sample range in days:",min_value=min_game_creation,max_value=0,value=(min_game_creation,0))
-            multi = st.multiselect("Selects the region in the world from which to sample the games",["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"],["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"])
-        
-            name = st.text_input("Name for the dataset:",value=options+"_vs_"+options2)
+
+
+            side = st.slider("Select the game length in minutes:", min_value=0, max_value=int(max_game_length / 60),
+                             value=(0, 10))
+            side2 = st.slider("Select the sample range in days:", min_value=min_game_creation, max_value=0,
+                              value=(min_game_creation, 0))
+            multi = st.multiselect("Selects the region in the world from which to sample the games",
+                                   ["EU West", "EU Nord", "Nord America", "Russia", "Latein America 1",
+                                    "Latein America 2"],
+                                   ["EU West", "EU Nord", "Nord America", "Russia", "Latein America 1",
+                                    "Latein America 2"])
+
+            name = st.text_input("Name for the dataset:", value=options + "_vs_" + options2)
             submit_button = st.form_submit_button(label='Add to datasets')
             if submit_button:
                 running_counter = 0
-                for row in cursor.execute("SELECT DISTINCT e.items, e.summoner_name, e.game_id FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
-                    running_counter+=1
+                for row in cursor.execute(
+                        "SELECT DISTINCT e.items, e.summoner_name, e.game_id FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id=" + str(
+                            own_champ) + " AND m.champion_id=" + str(other_champ)):
+                    running_counter += 1
                     items = json.loads(row[0])
-                    add_item_full(frames,items,str(running_counter)+" | "+row[1],True,winning_items,val,item_dict)
+                    add_item_full(frames, items, str(running_counter) + " | " + row[1], True, winning_items, val,
+                                  item_dict)
                 for x in range(len(frames["itemID"])):
                     idx = item_dict[str(frames["itemID"][x])]["name"]
                     frames["itemID"][x] = idx
-                
+
                 for x in range(len(frames["userID"])):
                     idx = item_dict[str(frames["itemID"][x])]["name"]
                     frames["itemID"][x] = idx
 
-
                 df = pd.DataFrame(frames)
                 print(df)
 
-
-                dataset = DatasetWrapper(name=name, data=df,id=1, param={"own_champ": options,"enemy_champ": options2, "item_limit": 0, "poor_mans_choice": False})
+                dataset = DatasetWrapper(name=name, data=df, id=1,
+                                         param={"own_champ": options, "enemy_champ": options2, "item_limit": 0,
+                                                "poor_mans_choice": False})
                 state.datasets.append(dataset)
                 st.sidebar.success(f"Dataset '{name}' saved.")
 
-        wilson = confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)
-        st.latex("P(X=(win,"+options+") \land Y=(lose,"+options2+")) = \\frac{1}{N}\\cdot\\sum_{i=0}^{N}{x_i}="+"{:.2f}".format(counter/(counter+anti_counter)))
+        wilson = confidence_wilson_score(counter / (counter + anti_counter), counter + anti_counter)
+        st.latex(
+            "P(X=(win," + options + ") \land Y=(lose," + options2 + ")) = \\frac{1}{N}\\cdot\\sum_{i=0}^{N}{x_i}=" + "{:.2f}".format(
+                counter / (counter + anti_counter)))
         st.markdown("**Confidence interval based on Wilson Score:**")
+
+
         st.latex("\left(w^{-}, w^{+}\\right) \\equiv\\left(p+\\frac{z{\\alpha / 2}^{2}}{2 n} \pm z{\\alpha / 2} \sqrt{\\frac{p(1-p)}{n}+\\frac{z{\\alpha / 2}^{2}}{4 n^{2}}}\\right) /\left(1+\\frac{z{\\alpha / 2}^{2}}{n}\\right)")
         st.latex("="+str(confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)))
         st.write("Based on the above figures the average winrate is ",round(counter/(counter+anti_counter),2)," with a 90% confidence interval of ",(round(wilson[0],2),round(wilson[1],2))," with a sample size of ",counter+anti_counter)
     else:
         st.error("Could not find any games with this matchup")
-
-
