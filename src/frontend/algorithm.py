@@ -5,11 +5,9 @@ import streamlit as st
 
 import src.frontend.page_handling as page_handling
 from src.algorithm.als.model_wrapper import ImplicitModelWrapper
+from src.algorithm.knn.model_wrapper import KNNModelWrapper
 from src.frontend.SessionState import session_get
 from src.frontend.util import timer
-
-from src.algorithm.als.model_wrapper import ImplicitModelWrapper
-from src.algorithm.knn.model_wrapper import KNNModelWrapper
 
 
 def als_configuration(datasets):
@@ -20,12 +18,12 @@ def als_configuration(datasets):
     conf['datasets'] = conf_widget.multiselect(label="Datasets", options=dataset_names)
     conf_widget.markdown("---")
     conf['iterations'] = conf_widget.number_input("Iterations", min_value=1, value=10, step=1, help="")
-    conf['factors'] = conf_widget.number_input("Factors", min_value=1, value=50, step=1, help="")
-    conf['regularization'] = conf_widget.number_input("Regularization", value=0.001, step=0.001, format="%.4f", help="")
+    conf['factors'] = conf_widget.number_input("Factors", min_value=1, value=64, step=1, help="")
+    conf['regularization'] = conf_widget.number_input("Regularization", value=0.1, step=0.001, format="%.4f", help="")
     conf_widget.markdown("---")
     conf['test_ratio'] = conf_widget.number_input("Test ratio", min_value=0.0, max_value=1.0, value=0.1, step=0.1,
                                                   help="")
-    conf['metric'] = conf_widget.selectbox("Metric", options=["map"])
+    conf['metric'] = conf_widget.selectbox("Metric", options=["map", "precision", "auc"])
     conf['metric_k'] = conf_widget.number_input("Top k", min_value=1, step=1, value=10, help="")
 
     submit = conf_widget.form_submit_button("Start")
@@ -36,8 +34,10 @@ def als_configuration(datasets):
 
     return submit, conf
 
+
 def highlight_max(s):
     return ["background-color : red"]
+
 
 def knn_configuration(datasets):
     dataset_names = [d.name for d in datasets]
@@ -56,22 +56,22 @@ def knn_configuration(datasets):
         conf['metric_k'] = st.number_input("Top k (only used when metric is map)", min_value=1, step=1, value=10, help="")
 
         conf['cross_validation_folds'] = st.number_input("Cross validation folds", min_value=2, step=1, value=10, help="")
+
         submit = st.form_submit_button("Start")
         if submit:
             conf['datasets_id'] = []
             for i in conf['datasets']:
                 conf['datasets_id'].append(dataset_names.index(i))
-    return submit,conf
-
+    return submit, conf
 
 
 def run_knn(datasets):
-
-    selects = st.sidebar.multiselect("Select the items you have already bought",["a","b"])
-    val = st.sidebar.slider(label="Select min sample size for calculation",min_value=0,max_value=20,value=10)
+    selects = st.sidebar.multiselect("Select the items you have already bought", ["a", "b"])
+    val = st.sidebar.slider(label="Select min sample size for calculation", min_value=0, max_value=20, value=10)
 
     for x in datasets:
         st.write(x)
+
 
 @timer
 def app():
@@ -148,7 +148,6 @@ def app():
                 this_dataset.trainings_knn.append(model_data)
                 progress_bar.progress(0)
 
-
     als_result_df = []
     knn_result_df = []
     for dataset in state.datasets:
@@ -164,6 +163,7 @@ def app():
             d.update(training['config'])
             d.update(training['evaluation'])
             knn_result_df.append(d)
+
     if als_result_df:
         st.header("Training results")
         st.subheader("ALS")
@@ -224,7 +224,7 @@ def app():
         print(knn_result_df)
 
         with st.beta_expander("Choose a trained model for inference:"):
-            active_training = st.selectbox("Current training", options=knn_result_df.index.values,key="unique",
+            active_training = st.selectbox("Current training", options=knn_result_df.index.values, key="unique",
                                            format_func=lambda x: f"Training: {x[0]} - Dataset: {x[1]}")
 
             if active_training:
@@ -250,7 +250,8 @@ def app():
                     col2.markdown("True ratings")
                     col2.write(inference_model.get_user_ratings(user=recommend_user, as_df=True))
 
-                opts_it = [inference_model.dataset_train.to_raw_iid(x) for x in inference_model.dataset_train.all_items()]
+                opts_it = [inference_model.dataset_train.to_raw_iid(x) for x in
+                           inference_model.dataset_train.all_items()]
                 st.subheader("Find the top N similar item to an item")
                 col1, col2 = st.beta_columns([2, 1])
                 similar_item = col1.selectbox("Item", options=opts_it,
@@ -260,4 +261,3 @@ def app():
 
                 if similar_item:
                     st.write(inference_model.similar_items(similar_item, similar_n, use_df=True))
-
