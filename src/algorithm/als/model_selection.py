@@ -85,6 +85,8 @@ class GridSearchCV:
                 else:
                     alpha = 1
                 algo = self.algo(**params)
+                print("Train", train_data.T.tocsr().nnz, train_data.T.tocsr().dtype, "Test", test_data.T.tocsr().nnz,
+                      test_data.T.tocsr().dtype)
                 result = self._fit_and_eval(train_data=(train_data * alpha), test_data=(test_data * alpha), algo=algo)
                 self.result[f'param_set_{param_set}'][f'Fold {fold}'] = result
             self.result[f'param_set_{param_set}']['mean'] = {key: np.mean(np.array(

@@ -32,7 +32,7 @@ class SparseDataset:
             raise ValueError("Test size needs to be between 0.0 and 1.0.")
 
     def __init__(self, item_user_matrix, items=None, users=None):
-        self.item_user = csr_matrix(item_user_matrix)
+        self.item_user = csr_matrix(item_user_matrix, dtype=float)
         self.user_item = self.item_user.T.tocsr()
 
         self.items = items

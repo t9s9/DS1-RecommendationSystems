@@ -25,9 +25,17 @@ def als_configuration(datasets):
                                                   help="")
     conf['metric'] = conf_widget.selectbox("Metric", options=["map", "precision", "auc"])
     conf['metric_k'] = conf_widget.number_input("Top k", min_value=1, step=1, value=10, help="")
-
+    conf['cross_validation_folds'] = conf_widget.number_input("Cross validation folds", min_value=0, step=1, value=0,
+                                                              help="Perform a cross validation with the given number "
+                                                                   "of folds. The test ratio is ignored. If set to zero"
+                                                                   " no cross validation is performed.")
     submit = conf_widget.form_submit_button("Start")
     if submit:
+        if conf['cross_validation_folds'] > 1:
+            conf['test_ratio'] = 0.0
+        elif conf['cross_validation_folds'] == 1:
+            st.warning("Cross validation with one fold is not possible. Test ratio will be taken.")
+
         conf['datasets_id'] = []
         for i in conf['datasets']:
             conf['datasets_id'].append(dataset_names.index(i))
@@ -46,16 +54,20 @@ def knn_configuration(datasets):
     with form:
         conf['datasets'] = st.multiselect(label="Datasets", options=dataset_names)
         st.markdown("---")
-        conf["cluster_k"] = st.slider(label="Select Cluster value k",min_value=0,max_value=100,value=10)
-        conf["similarity"] = st.selectbox(label="Select similarity metric", options=["cosine","msd","pearson","pearson_baseline"])
+        conf["cluster_k"] = st.slider(label="Select Cluster value k", min_value=0, max_value=100, value=10)
+        conf["similarity"] = st.selectbox(label="Select similarity metric",
+                                          options=["cosine", "msd", "pearson", "pearson_baseline"])
         st.markdown("---")
-        conf["metric"] = st.selectbox("Metric", options=["mae","mse","map"])
+        conf["metric"] = st.selectbox("Metric", options=["mae", "mse", "map"])
 
-        conf['thresh_metric'] = st.number_input("Threshold for recommendation", min_value=0.0, max_value=100.0, value=0.1, step=0.1,
-                                                      help="")
-        conf['metric_k'] = st.number_input("Top k (only used when metric is map)", min_value=1, step=1, value=10, help="")
+        conf['thresh_metric'] = st.number_input("Threshold for recommendation", min_value=0.0, max_value=100.0,
+                                                value=0.1, step=0.1,
+                                                help="")
+        conf['metric_k'] = st.number_input("Top k (only used when metric is map)", min_value=1, step=1, value=10,
+                                           help="")
 
-        conf['cross_validation_folds'] = st.number_input("Cross validation folds", min_value=2, step=1, value=10, help="")
+        conf['cross_validation_folds'] = st.number_input("Cross validation folds", min_value=2, step=1, value=10,
+                                                         help="")
 
         submit = st.form_submit_button("Start")
         if submit:
@@ -98,10 +110,10 @@ def app():
         if conf_datasets == "ALS":
             for i in config['datasets_id']:
                 this_dataset = state.datasets[i]
+                progress_text.write("Creating dataset... (dataframe -> sparse item-user matrix)")
                 model = ImplicitModelWrapper(dataset=this_dataset, iterations=config['iterations'],
                                              factors=config['factors'], regularization=config['regularization'],
                                              test_size=config['test_ratio'])
-
                 running = True
 
                 def update_progressbar():
@@ -109,28 +121,36 @@ def app():
                         val = int((model.current_iteration + 1) / model.iterations * 100)
                         progress_bar.progress(val)
                         progress_text.write(
-                            "Fitting dataset {2}:      {0:04d} / {1:04d}  ({3:.3f}s)".format(
+                            "Fitting dataset '{2}'{4}:      {0:04d} / {1:04d}  ({3:.3f}s)".format(
                                 model.current_iteration + 1,
                                 model.iterations, this_dataset.name,
-                                model.current_iteration_time))
+                                model.current_iteration_time,
+                                f"    [Fold: {model.current_fold}]" if config['cross_validation_folds'] > 1 else ""))
 
                 progress_updater = threading.Thread(target=update_progressbar)
                 st.report_thread.add_report_ctx(progress_updater)
                 progress_updater.start()
 
-                model.fit()
+                if config['cross_validation_folds'] > 1:
+                    r = model.cross_validate(cv=config['cross_validation_folds'], metric=config['metric'],
+                                             k=config['metric_k'])
+                else:
+                    model.fit()
                 running = False
                 progress_updater.join()
 
                 model_data = model.export()
-                model_data['test_ratio'] = config['test_ratio']
-
-                if this_dataset.sparse_data_test is not None:
-                    progress_text.write("Evaluating...")
-                    model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                if config['cross_validation_folds'] > 1:
+                    model_data['test_ratio'] = f"{config['cross_validation_folds']}Fold-CV"
+                    model_data['evaluation'] = r
                 else:
-                    model_data['evaluation'] = dict(score="", metric="", k="")
-                    st.info("An evaluation cannot be performed because no test set was specified.")
+                    model_data['test_ratio'] = round(config['test_ratio'], 2)
+                    if this_dataset.sparse_data_test is not None:
+                        progress_text.write("Evaluating...")
+                        model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config['metric_k'])
+                    else:
+                        model_data['evaluation'] = dict(score="", metric="", k="")
+                        st.info("An evaluation cannot be performed because no test set was specified.")
 
                 this_dataset.trainings_als.append(model_data)
                 progress_text.write("")
@@ -138,13 +158,15 @@ def app():
         elif conf_datasets == "KNN":
             for i in config['datasets_id']:
                 this_dataset = state.datasets[i]
-                model = KNNModelWrapper(dataset=this_dataset,k=config["cluster_k"], sim=config["similarity"])
+                model = KNNModelWrapper(dataset=this_dataset, k=config["cluster_k"], sim=config["similarity"])
 
                 model.fit()
                 running = False
 
                 model_data = model.export()
-                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config["metric_k"], cross_validation_folds=config['cross_validation_folds'],thresh= config['thresh_metric'])
+                model_data['evaluation'] = model.evaluate(metric=config['metric'], k=config["metric_k"],
+                                                          cross_validation_folds=config['cross_validation_folds'],
+                                                          thresh=config['thresh_metric'])
                 this_dataset.trainings_knn.append(model_data)
                 progress_bar.progress(0)
 
@@ -239,7 +261,8 @@ def app():
                 col1, col2 = st.beta_columns([2, 1])
                 opts = [inference_model.dataset_train.to_raw_uid(x) for x in inference_model.dataset_train.all_users()]
                 recommend_user = col1.selectbox("User", options=opts,
-                                                help="Select a user for which item recommendations are to be made.", )
+                                                help="Select a user for which item recommendations are to be made.",
+                                                key="Nuser1")
                 recommend_n = col2.number_input("N", help="The number of top recommendations", min_value=1, step=1,
                                                 value=10,
                                                 key="N_users2")
