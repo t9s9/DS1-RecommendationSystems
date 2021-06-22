@@ -94,7 +94,7 @@ class ImplicitModelWrapper:
     def evaluate(self, metric="map", k=10):
         if self.dataset_test is None:
             raise ValueError("No test dataset specified.")
-        if metric not in ['map', 'precision']:
+        if metric not in ['map', 'precision', 'auc']:
             raise ValueError(f"Unknown metric {metric}.")
 
         score = ranking_metrics_at_k(model=self.model, K=k, train_user_items=self.dataset_train.user_item,
