@@ -124,7 +124,7 @@ def app():
     if not os.path.exists("data/lol_dataset/item.json"):
         download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/item.json","data/lol_dataset/items.json")
 
-    connection = sql.connect("src/lol_dataset/league_of_legends.db")
+    connection = sql.connect("data/lol_dataset/league_of_legends.db")
     cursor = connection.cursor()
     total_games = 0
     max_game_length = 0
