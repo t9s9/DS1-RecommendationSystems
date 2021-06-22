@@ -71,9 +71,9 @@ def knn_configuration(datasets):
                                           options=["cosine", "msd", "pearson", "pearson_baseline"],
                                           help="Specify a distance metric for KNN")
         st.markdown("---")
-        conf["metric"] = st.selectbox("Metric", options=["mae", "mse", "map"],
+        conf["metric"] = st.selectbox("Metric", options=["mae", "mse", "ap"],
                                       help="The metric used for evaluation: Mean average error, Mean squared error,"
-                                           "and mean average precision")
+                                           "and average precision")
 
         conf['thresh_metric'] = st.number_input("Threshold for recommendation", min_value=0.0, max_value=100.0,
                                                 value=0.1, step=0.1,

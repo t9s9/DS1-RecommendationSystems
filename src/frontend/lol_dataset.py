@@ -128,8 +128,8 @@ def app():
 
     min_game_creation = -int((int(time.time() * 1000) - min_game_creation) / (1000 * 60 * 60 * 24))
 
-    for row in cursor.execute("SELECT COUNT(champion_id) from matches"):
-        st.write("A total of ", row[0], " games have been found in the database with the given filters.")
+    for row in cursor.execute("SELECT champion_id from matches"):
+        dataframe = st.write("A total of ", row[0], " games have been found in the database with the given filters.")
         total_games = row[0]
 
     st.write("This is ", 100, "% of the whole dataset.")

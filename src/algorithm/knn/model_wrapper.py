@@ -27,7 +27,6 @@ def is_item(item, all_items):
 
 def precision_recall_at_k(predictions, k=10, threshold=3.5):
     """Return precision and recall at k metrics for each user"""
-
     # First map the predictions to each user.
     user_est_true = defaultdict(list)
     for uid, _, true_r, est, _ in predictions:
@@ -144,9 +143,9 @@ class KNNModelWrapper:
     def evaluate(self, metric="mae", k=10, cross_validation_folds=5, thresh=0.5):
         if self.dataset_test is None:
             raise ValueError("No test dataset specified.")
-        if metric not in ['mse', 'mae', "map"]:
+        if metric not in ['mse', 'mae', "ap"]:
             raise ValueError(f"Unknown metric {metric}.")
-        if metric == "map":
+        if metric == "ap":
             kf = KFold(n_splits=5)
             results = dict(test_map=[], test_mar=[])
             for trainset, testset in kf.split(self.data):
@@ -156,11 +155,11 @@ class KNNModelWrapper:
                 total = 0
                 for x in precisions.keys():
                     total += precisions[x]
-                results["test_map"].append(total / len(precisions))
+                results["test_ap"].append(total / len(precisions))
                 total = 0
                 for x in recalls.keys():
                     total += recalls[x]
-                results["test_mar"].append(total / len(recalls))
+                results["test_ar"].append(total / len(recalls))
         else:
             results = cross_validate(self.model, self.data, measures=[metric], cv=cross_validation_folds,
                                      return_train_measures=True)
