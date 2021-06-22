@@ -86,12 +86,12 @@ def coldcase_prediction(items,current_dict,rating,all_items):
                 current_dict[x] = (rating,1)
 
 """Taken from https://stackoverflow.com/a/16696317"""
-def download_file(url,local):
+def download_file(url,local,stream=True,verify=False):
     local_filename = local
     prog = st.progress(0)
     st.write("Downloading database from public URL")
     # NOTE the stream=True parameter below
-    with requests.get(url, stream=True,verify=False) as r:
+    with requests.get(url, stream=stream,verify=verify) as r:
         r.raise_for_status()
         total_size = 0
         with open(local_filename, 'wb') as f:
@@ -119,6 +119,10 @@ def app():
 
     if not os.path.exists("src/lol_dataset/league_of_legends.db"):
         download_file("https://www.kava-i.de/league_of_legends.db","src/lol_dataset/league_of_legends.db")
+    if not os.path.exists("src/lol_dataset/champion.json"):
+        download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/champion.json","src/lol_dataset/champion.json")
+    if not os.path.exists("src/lol_dataset/item.json"):
+        download_file("http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/item.json","src/lol_dataset/items.json")
 
     connection = sql.connect("src/lol_dataset/league_of_legends.db")
     cursor = connection.cursor()
@@ -146,7 +150,7 @@ def app():
     col1, col2, col3 = st.beta_columns([1,1,1])
     col2.button("Reset showcase")
 
-    js = json.loads(open("data/lol_dataset/champion.json","r").read())
+    js = json.loads(open("src/lol_dataset/champion.json","r").read())
     champions = []
     champion_dict = {}
     for x in js["data"]:
@@ -163,7 +167,7 @@ def app():
 
     lore_own = json.loads(requests.get(lore_url).text)
     lore_enemy = json.loads(requests.get(lore_enemy_url).text)
-    all_items = requests.get('http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/item.json').json()["data"]
+    all_items = json.loads(open('src/lol_dataset/items.json').read())["data"]
     item_dict = {}
     all_item_names = []
     for i in all_items:
