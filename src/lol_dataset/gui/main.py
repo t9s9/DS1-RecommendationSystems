@@ -1,3 +1,5 @@
+import random
+
 import streamlit as st
 import sqlite3 as sql
 import pandas as pd
@@ -8,8 +10,9 @@ from tqdm import trange
 import time
 import numpy as np
 from scipy import stats
+import sys
 from math import sqrt
-from surprise import SVD
+from surprise import SVD, NormalPredictor
 from surprise import NMF
 from surprise.prediction_algorithms.knns import KNNBaseline
 from surprise.prediction_algorithms.knns import KNNBasic
@@ -20,6 +23,9 @@ from surprise.model_selection import cross_validate
 from surprise.prediction_algorithms.slope_one import SlopeOne
 from surprise.prediction_algorithms.co_clustering import CoClustering
 from surprise.model_selection import GridSearchCV
+from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.neighbors import NearestNeighbors
+from scipy.sparse import csr_matrix
 
 def confidence_wilson_score2(wins, loses):
     n = wins + loses 
@@ -258,47 +264,90 @@ if (counter+anti_counter) != 0:
             item_dict_user[x[1]] = int(item_dict[x[0]]["base_id"])
 
         add_item_full(frames,item_dict_user,running_counter,True,winning_items,val,item_dict)
-        
+
+        #discretizer = KBinsDiscretizer(n_bins=5,encode="ordinal",strategy="quantile")
+        #frames["rating"] = discretizer.fit_transform(np.array(frames["rating"]).reshape(-1,1)).flatten()
+
         df = pd.DataFrame(frames)
+
+        df_feature = df.pivot_table(index='itemID', columns='userID', aggfunc='size', fill_value=0)
+
+        st.write(df)
+        feature_matrix = csr_matrix(df_feature.values)
+        model = NearestNeighbors(metric='cosine', algorithm='brute', n_neighbors=5, n_jobs=-1)
+        model.fit(feature_matrix)
+        print(item_dict[str(3142)])
+        i = df_feature.index.get_loc(3142)
+        neigh_dist, neigh_ind = model.kneighbors(feature_matrix[i],10,return_distance=True)
+        result = sorted(list(zip(df_feature.index[neigh_ind.squeeze()], neigh_dist.squeeze())), key=lambda x: x[1])[0:]
+        for x,y in result:
+            st.write("item: ",item_dict[str(x)],"score: ",y)
+       # st.stop()
+
+
+
+
+
 
         # A reader is still needed but only the rating_scale param is requiered.
         reader = Reader(rating_scale=(0, 1))
         # The columns must correspond to user id, item id and ratings (in that order).
+        st.write(df)
+
         data = Dataset.load_from_df(df[['userID', 'itemID', 'rating']], reader)
+
         train = data.build_full_trainset()
 
         data_x = []
         data_rmse = []
         data_mae = []
-        #for x in range(50,100,10):
+        for x in ["pearson","cosine","pearson_baseline","msd"]:
             #algo = KNNBaseline(sim_options={"user_based": True, "name":"pearson"},k=x,n_epochs=x)
-        #    algo = KNNWithMeans(sim_options={"user_based": True, "name":"pearson"},k=x,min_k=5)
-            # algo = SVD(n_epochs=x)
-        #    result = cross_validate(algo,data,cv=3,return_train_measures=True,verbose=True)
-        #    data_x.append(x)
-        #    data_rmse.append(np.mean(result["test_rmse"]))
-        #    data_mae.append(np.mean(result["test_mae"]))
+            algo = KNNWithMeans(sim_options={"user_based": True, "name":x},k=20,min_k=5)
+            #algo = NormalPredictor()
+            #algo = NormalPredictor()
+            result = cross_validate(algo,data,cv=3,return_train_measures=True,verbose=True)
+            data_x.append(x)
+            data_rmse.append(np.mean(result["test_rmse"]))
+            data_mae.append(np.mean(result["test_mae"]))
 
-        #df_data = pd.DataFrame(data_rmse,
-        #            columns=["RMSE for different k"],
-        #           index=data_x)
+        df_data = pd.DataFrame(data_rmse,
+                    columns=["RMSE for different k"],
+                   index=data_x)
 
-        #st.line_chart(df_data)
+        st.line_chart(df_data)
 
-        #df_data = pd.DataFrame(data_mae,
-        #            columns=["MAE for different k"],
-        #           index=data_x)
+        df_data = pd.DataFrame(data_mae,
+                    columns=["MAE for different k"],
+                   index=data_x)
 
-        #st.line_chart(df_data)
+        st.line_chart(df_data)
 
         algo = KNNWithMeans(sim_options={"user_based": True, "name":"pearson"},k=15,min_k=5)
         algo.fit(train)
         ratings = []
-        #param_grid = {'n_epochs': [5, 10], 'lr_all': [0.002, 0.005],'reg_all': [0.4, 0.6]}
-        #gs = GridSearchCV(KNNBasic, param_grid, measures=['rmse', 'mae'], cv=3)
 
-        #print(gs.fit(data))
-        #print(gs)
+        param_grid = {
+            "sim_options":
+                {'name': ['cosine',"pearson","pearson_baseline"]},
+            "lr": [0.001,0.01]
+        }
+        gs = GridSearchCV(KNNBasic, param_grid, measures=['rmse', 'mae',"mse"], cv=5,return_train_measures=True,)
+
+        print(gs.fit(data))
+        data_x = []
+        data_rmse = []
+        data_mae = []
+        print(gs.cv_results)
+        for x in range(len(gs.cv_results["mean_test_mae"])):
+            data_mae.append([gs.cv_results["mean_test_mae"][x],str(gs.cv_results["params"][x]["sim_options"]["name"])])
+
+        data_mae.sort(key=lambda x: x[0])
+
+        df_data = pd.DataFrame(list(map(lambda x: x[0],data_mae)),columns=["MAE"],index=list(map(lambda x: x[1],data_mae)))
+        st.write(df_data)
+
+        st.line_chart(df_data)
         print(running_counter)
         
         list_items_filtered = []

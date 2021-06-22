@@ -26,16 +26,6 @@ from .util import timer
 from src.frontend.dataset import DatasetWrapper
 import os
 
-def confidence_wilson_score2(wins, loses):
-    n = wins + loses 
-
-    if n == 0:
-        return 0
-
-    z = 1.44 # 95% target error
-    phat = float(wins) / n
-    return ((phat + z*z/(2*n) - z * sqrt((phat*(1-phat)+z*z/(4*n))/n))/(1+z*z/n))
-
 def is_item(item,all_items):
     if item == 0:
         return False
@@ -45,6 +35,9 @@ def is_item(item,all_items):
         return all_items[str(item)]["gold"]["total"] != 0
     return False
 
+"""
+Taken from https://www.mikulskibartosz.name/wilson-score-in-python-example
+"""
 def confidence_wilson_score(p, n, z = 1.44):
     denominator = 1 + z**2/n
     centre_adjusted_probability = p + z*z / (2*n)
@@ -239,7 +232,6 @@ def app():
         outcomes = np.array(games)
 
         with st.sidebar.form(key='my_form'):
-           
             side = st.slider("Select the game length in minutes:",min_value=0,max_value=int(max_game_length/60),value=(0,10))
             side2 = st.slider("Select the sample range in days:",min_value=min_game_creation,max_value=0,value=(min_game_creation,0))
             multi = st.multiselect("Selects the region in the world from which to sample the games",["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"],["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"])
@@ -272,10 +264,10 @@ def app():
         wilson = confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)
         st.latex("P(X=(win,"+options+") \land Y=(lose,"+options2+")) = \\frac{1}{N}\\cdot\\sum_{i=0}^{N}{x_i}="+"{:.2f}".format(counter/(counter+anti_counter)))
         st.markdown("**Confidence interval based on Wilson Score:**")
-        st.latex("P\\left(\\Theta\mid y \leq \\frac{p-\\Theta}{\\sqrt{\\frac{1}{n}\cdot p \cdot (1-p)}} \leq z_{0.90}\\right) = "+str(confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)))
+        st.latex("\left(w^{-}, w^{+}\\right) \\equiv\\left(p+\\frac{z{\\alpha / 2}^{2}}{2 n} \pm z{\\alpha / 2} \sqrt{\\frac{p(1-p)}{n}+\\frac{z{\\alpha / 2}^{2}}{4 n^{2}}}\\right) /\left(1+\\frac{z{\\alpha / 2}^{2}}{n}\\right)")
+        st.latex("="+str(confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)))
         st.write("Based on the above figures the average winrate is ",round(counter/(counter+anti_counter),2)," with a 90% confidence interval of ",(round(wilson[0],2),round(wilson[1],2))," with a sample size of ",counter+anti_counter)
     else:
         st.error("Could not find any games with this matchup")
-
 
 
