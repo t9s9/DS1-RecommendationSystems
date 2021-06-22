@@ -244,7 +244,7 @@ def app():
             side2 = st.slider("Select the sample range in days:",min_value=min_game_creation,max_value=0,value=(min_game_creation,0))
             multi = st.multiselect("Selects the region in the world from which to sample the games",["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"],["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"])
         
-            name = st.text_input("Name for the dataset:")
+            name = st.text_input("Name for the dataset:",value=options+"_vs_"+options2)
             submit_button = st.form_submit_button(label='Add to datasets')
             if submit_button:
                 running_counter = 0
