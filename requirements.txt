@@ -1,0 +1,13 @@
+kaggle~=1.5.12
+pandas~=1.2.4
+tqdm~=4.61.0
+streamlit~=0.82.0
+surprise~=0.1
+numpy~=1.20.3
+requests~=2.25.1
+plotly~=4.14.3
+implicit~=0.4.4
+scipy~=1.6.3
+sklearn~=0.0
+scikit-learn~=0.24.2
+joblib~=1.0.1
