@@ -331,4 +331,5 @@ def app():
         st.latex("="+str(confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)))
         st.write("Based on the above figures the average winrate is ",round(counter/(counter+anti_counter),2)," with a 90% confidence interval of ",(round(wilson[0],2),round(wilson[1],2))," with a sample size of ",counter+anti_counter)
     else:
+        submit_button2x = ok_side_form.form_submit_button(label='Apply')
         st.error("Could not find any games with this matchup")
