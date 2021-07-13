@@ -25,6 +25,7 @@ from .SessionState import session_get
 from .util import timer
 from src.frontend.dataset import DatasetWrapper
 import os
+import math
 
 def confidence_wilson_score2(wins, loses):
     n = wins + loses 
@@ -133,18 +134,45 @@ def app():
     for row in cursor.execute("SELECT MIN(creation_time) from matches"):
         min_game_creation = row[0]
 
-    min_game_creation = -int((int(time.time()*1000) - min_game_creation)/(1000*60*60*24))
+    min_game_creation = -math.floor((int(time.time()*1000) - min_game_creation)/(1000*60*60*24))-1
+
+    ok_side_form = st.sidebar.form(key='my_form')
+    game_length_min = ok_side_form.slider("Select the game length in minutes:",min_value=0,max_value=int(max_game_length/60),value=(0,10))
+    sample_range_days = ok_side_form.slider("Select the sample range in days:",min_value=min_game_creation,max_value=0,value=(min_game_creation,0))
+
+    multi = ok_side_form.multiselect("Selects the region in the world from which to sample the games",["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"],["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"],key="Unique3")
+
+    inv_mappings = { "https://euw1.api.riotgames.com":"EU West", "https://eun1.api.riotgames.com": "EU Nord" , "https://na1.api.riotgames.com":"Nord America", "https://la1.api.riotgames.com":"Latein America 1", "https://la2.api.riotgames.com":"Latein America 2","https://ru.api.riotgames.com":"Russia"}
 
     for row in cursor.execute("SELECT COUNT(champion_id) from matches"):
-        st.write("A total of ",row[0]," games have been found in the database with the given filters.")
         total_games = row[0]
 
-    st.write("This is ",100,"% of the whole dataset.")
+    epoch_time = int(time.time()*1000)
 
 
-    st.title("Showcase")
-    col1, col2, col3 = st.beta_columns([1,1,1])
-    col2.button("Reset showcase")
+    mappings = {"EU West": "https://euw1.api.riotgames.com", "EU Nord": "https://eun1.api.riotgames.com", "Nord America": "https://na1.api.riotgames.com", "Latein America 1":"https://la1.api.riotgames.com", "Latein America 2": "https://la2.api.riotgames.com","Russia":"https://ru.api.riotgames.com"}
+
+    execute_string = '('
+    for x in multi:
+        if execute_string != '(':
+            execute_string+=" OR "
+        execute_string += "idx = \""+mappings[x]+"\""
+    execute_string+=")"
+
+
+    filtered = 0
+    cursor.execute("DROP VIEW IF EXISTS filtered_matches")
+    cursor.execute("CREATE VIEW filtered_matches AS SELECT * from matches WHERE game_duration >= {} AND game_duration <= {} AND creation_time >= {} AND creation_time <= {} AND {}".format(game_length_min[0]*60,game_length_min[1]*60,(epoch_time+sample_range_days[0]*60*60*24*1000),epoch_time+sample_range_days[1]*60*60*24*1000,execute_string))
+
+
+    data = []
+    data_2 = []
+    for row in cursor.execute("SELECT idx,COUNT(*) from filtered_matches GROUP BY idx"):
+        data.append(row[1])
+        data_2.append(inv_mappings[row[0]])
+    region = pd.DataFrame(data,index=data_2,columns=["Data points"])
+
+    st.bar_chart(region)
 
     js = json.loads(open("data/lol_dataset/champion.json","r").read())
     champions = []
@@ -152,6 +180,40 @@ def app():
     for x in js["data"]:
         champions.append(x)
         champion_dict[x] = (int(js["data"][x]["key"]),js["data"][x]["blurb"])
+
+    data = []
+    data_2 = []
+    for row in cursor.execute("SELECT champion_id,COUNT(*) from filtered_matches GROUP BY champion_id ORDER BY Count(*) DESC LIMIT 20"):
+        data.append(row[1])
+        for x in champion_dict:
+            if row[0] == champion_dict[x][0]:
+                data_2.append(x)
+
+    champs = pd.DataFrame(data,index=data_2,columns=["Data points"])
+    st.bar_chart(champs)
+
+    data = []
+    data_2 = []
+    for row in cursor.execute("SELECT champion_id,COUNT(*) from filtered_matches GROUP BY champion_id ORDER BY Count(*) ASC LIMIT 20"):
+        data.append(row[1])
+        for x in champion_dict:
+            if row[0] == champion_dict[x][0]:
+                data_2.append(x)
+
+    champs = pd.DataFrame(data,index=data_2,columns=["Data points"])
+    st.bar_chart(champs)
+
+
+    for row in cursor.execute("SELECT COUNT(champion_id) from filtered_matches"):
+        st.write("A total of ",row[0]," games have been found in the database with the given filters.")
+        filtered = row[0]
+
+
+    st.write("This is ",round(100*filtered/total_games,2),"% of the whole dataset.")
+
+
+    st.title("Showcase")
+    col1, col2, col3 = st.beta_columns([1,1,1])
 
     create_constrains = ""
     col1, col3,col2 = st.beta_columns([3,1,3])
@@ -197,12 +259,12 @@ def app():
     running_counter = 0
     with col2.empty():
         prog.progress(0)
-        for row in cursor.execute("SELECT e.champion_id, e.items FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
+        for row in cursor.execute("SELECT e.champion_id, e.items FROM filtered_matches e INNER JOIN filtered_matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
             counter+=1
             items = json.loads(row[1])
             coldcase_prediction([items["item0"],items["item1"],items["item2"],items["item3"],items["item4"],items["item5"],items["item6"]],winning_items,1,all_items)
 
-        for row in cursor.execute("SELECT m.champion_id, e.items FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 0 AND m.win=1 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
+        for row in cursor.execute("SELECT m.champion_id, e.items FROM filtered_matches e INNER JOIN filtered_matches m ON m.game_id = e.game_id WHERE e.win = 0 AND m.win=1 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
             anti_counter+=1
             items = json.loads(row[1])
             coldcase_prediction([items["item0"],items["item1"],items["item2"],items["item3"],items["item4"],items["item5"],items["item6"]],winning_items,0,all_items)
@@ -234,36 +296,32 @@ def app():
             list_items_names.append(item_dict[str(x[1])]["name"])
         outcomes = np.array(games)
 
-        with st.sidebar.form(key='my_form'):
-           
-            side = st.slider("Select the game length in minutes:",min_value=0,max_value=int(max_game_length/60),value=(0,10))
-            side2 = st.slider("Select the sample range in days:",min_value=min_game_creation,max_value=0,value=(min_game_creation,0))
-            multi = st.multiselect("Selects the region in the world from which to sample the games",["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"],["EU West","EU Nord", "Nord America", "Russia","Latein America 1","Latein America 2"])
         
-            name = st.text_input("Name for the dataset:")
-            submit_button = st.form_submit_button(label='Add to datasets')
-            if submit_button:
-                running_counter = 0
-                for row in cursor.execute("SELECT DISTINCT e.items, e.summoner_name, e.game_id FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
-                    running_counter+=1
-                    items = json.loads(row[0])
-                    add_item_full(frames,items,str(running_counter)+" | "+row[1],True,winning_items,val,item_dict)
-                for x in range(len(frames["itemID"])):
-                    idx = item_dict[str(frames["itemID"][x])]["name"]
-                    frames["itemID"][x] = idx
+        name = ok_side_form.text_input("Name for the dataset:",key="Unique4")
+        submit_button2x = ok_side_form.form_submit_button(label='Apply')
+        submit_button = st.sidebar.button(label='Add to dataset')
+        if submit_button:
+            running_counter = 0
+            for row in cursor.execute("SELECT DISTINCT e.items, e.summoner_name, e.game_id FROM matches e INNER JOIN matches m ON m.game_id = e.game_id WHERE e.win = 1 AND m.win=0 AND e.champion_id="+str(own_champ)+" AND m.champion_id="+str(other_champ)):
+                running_counter+=1
+                items = json.loads(row[0])
+                add_item_full(frames,items,str(running_counter)+" | "+row[1],True,winning_items,val,item_dict)
+            for x in range(len(frames["itemID"])):
+                idx = item_dict[str(frames["itemID"][x])]["name"]
+                frames["itemID"][x] = idx
                 
-                for x in range(len(frames["userID"])):
-                    idx = item_dict[str(frames["itemID"][x])]["name"]
-                    frames["itemID"][x] = idx
+            for x in range(len(frames["userID"])):
+                idx = item_dict[str(frames["itemID"][x])]["name"]
+                frames["itemID"][x] = idx
 
 
-                df = pd.DataFrame(frames)
-                print(df)
+            df = pd.DataFrame(frames)
+            print(df)
 
 
-                dataset = DatasetWrapper(name=name, data=df,id=1, param={"own_champ": options,"enemy_champ": options2, "item_limit": 0, "poor_mans_choice": False})
-                state.datasets.append(dataset)
-                st.sidebar.success(f"Dataset '{name}' saved.")
+            dataset = DatasetWrapper(name=name, data=df,id=1, param={"own_champ": options,"enemy_champ": options2, "item_limit": 0, "poor_mans_choice": False})
+            state.datasets.append(dataset)
+            st.sidebar.success(f"Dataset '{name}' saved.")
 
         wilson = confidence_wilson_score(counter/(counter+anti_counter),counter+anti_counter)
         st.latex("P(X=(win,"+options+") \land Y=(lose,"+options2+")) = \\frac{1}{N}\\cdot\\sum_{i=0}^{N}{x_i}="+"{:.2f}".format(counter/(counter+anti_counter)))
